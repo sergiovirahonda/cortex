@@ -9,14 +9,19 @@ void NativeDShotMotorAdapter::init(int pin, rmt_channel_t channel) {
     rmt_driver_install(config.channel, 0, 0);
 }
 
-void NativeDShotMotorAdapter::sendThrottle(int throttle) {
+void NativeDShotMotorAdapter::sendThrottle(uint16_t throttle) {
     if (throttle > 2047) throttle = 2047;
-    // Bump minimum to 48
-    if (throttle < 50) throttle = 50;
+    if (throttle > 0 && throttle < 48) throttle = 48; // Safety Lock
+    sendPacket(throttle);
+}
 
-    uint16_t safeThrottle = (uint16_t)throttle;
-    
-    uint16_t packet = (safeThrottle << 1) | 0; 
+void NativeDShotMotorAdapter::sendCommand(uint16_t cmd) {
+    if (cmd > 47) return; // Commands are only 0-47
+    sendPacket(cmd);      // Send raw value (e.g. 21)
+}
+
+void NativeDShotMotorAdapter::sendPacket(uint16_t value) {
+    uint16_t packet = (value << 1) | 0; 
     int csum = 0;
     int csum_data = packet;
     for (int i = 0; i < 3; i++) {
@@ -33,21 +38,4 @@ void NativeDShotMotorAdapter::sendThrottle(int throttle) {
     }
     _items[16] = {{{ 0, 0, 0, 0 }}}; 
     rmt_write_items(_channel, _items, 16, false);
-}
-
-void NativeDShotMotorAdapter::armSequence() {
-    // 1. Safety Wait (Sends 0 to unlock ESCs) - 3 Seconds
-    for(int i=0; i<300; i++) {
-        sendThrottle(0);
-        delay(10);
-    }
-
-    // 2. THE KICK (Sends 700 to break static friction) - 0.1 Seconds
-    for(int i=0; i<20; i++) {
-        sendThrottle(700); // The "Punch"
-        delay(5);
-    }
-
-    // 3. Drop to Idle (Keeps them spinning)
-    sendThrottle(200); 
 }

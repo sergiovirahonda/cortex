@@ -10,7 +10,6 @@
 #include "models/attitude.h"
 #include "models/motor_output.h"
 #include "models/drone_command.h"
-#include "models/motor_mix.h"
 #include "adapters/radio_adapter.h"
 #include "adapters/mpu_adapter.h"
 #include "adapters/motor_adapter.h"
@@ -68,60 +67,8 @@ RadioAdapter radioAdapter(
 );
 MPUAdapter mpuAdapter(&mpu);
 FlightController flightController;
-// NativeDShotMotorAdapter esc1, esc2, esc3, esc4;
+NativeDShotMotorAdapter esc1, esc2, esc3, esc4;
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RST);
-
-class NativeDShot {
-private:
-    rmt_channel_t _channel;
-    rmt_item32_t _items[17]; 
-public:
-    void init(int pin, rmt_channel_t channel) {
-        _channel = channel;
-        rmt_config_t config = RMT_DEFAULT_CONFIG_TX((gpio_num_t)pin, channel);
-        config.clk_div = 1; 
-        rmt_config(&config);
-        rmt_driver_install(config.channel, 0, 0);
-    }
-    
-    void sendThrottle(uint16_t throttle) {
-        if (throttle > 2047) throttle = 2047;
-        if (throttle > 0 && throttle < 48) throttle = 48; // Safety Lock
-        sendPacket(throttle);
-    }
-    void sendCommand(uint16_t cmd) {
-        if (cmd > 47) return; // Commands are only 0-47
-        sendPacket(cmd);      // Send raw value (e.g. 21)
-    }
-private:
-    // Shared Logic (To avoid code duplication)
-    void sendPacket(uint16_t value) {
-        uint16_t packet = (value << 1) | 0; 
-        int csum = 0;
-        int csum_data = packet;
-        for (int i = 0; i < 3; i++) {
-            csum ^= (csum_data & 0x0F);
-            csum_data >>= 4;
-        }
-        packet = (packet << 4) | (csum & 0x0F);
-        
-        for (int i = 0; i < 16; i++) {
-            bool bit = (packet & 0x8000);
-            packet <<= 1;
-            if (bit) { _items[i] = {{{ 190, 1, 76, 0 }}}; } 
-            else     { _items[i] = {{{ 95, 1, 171, 0 }}}; } 
-        }
-        _items[16] = {{{ 0, 0, 0, 0 }}}; 
-        rmt_write_items(_channel, _items, 16, false);
-    }
-};
-
-NativeDShot esc1, esc2, esc3, esc4;
-
-
-// =================================================================
-// PD HISTORY VARIABLES (MUST BE GLOBAL)
-// =================================================================
 
 void setup() {
   Serial.begin(115200);
