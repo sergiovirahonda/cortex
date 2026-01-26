@@ -1,1 +1,376 @@
-# cortex
+# Cortex
+
+A professional-grade ESP32-S3 flight controller for DIY quadcopter drones, featuring real-time attitude stabilization, DShot ESC control, and wireless command reception. This project pairs with [Synapse](https://github.com/sergiovirahonda/synapse), the transmitter controller that sends flight commands via joystick.
+
+## Overview
+
+Cortex is the flight control system (FC) for your DIY drone project. It receives wireless commands from the Synapse transmitter, processes sensor data from an MPU6050 gyroscope/accelerometer, and uses PID control algorithms to stabilize the drone while executing flight maneuvers. The controller runs on an ESP32-S3 microcontroller and communicates with a 4-in-1 ESC via native DShot protocol.
+
+## Features
+
+* 🚁 **Real-time Stabilization**: PD controllers for roll/pitch, P controller for yaw
+* ⚡ **Native DShot ESC Control**: Direct hardware-level DShot600 protocol via ESP32 RMT
+* 📡 **Wireless Communication**: nRF24L01 radio module for low-latency command reception
+* 🎯 **MPU6050 Integration**: Hardware DLPF filtering and software calibration for accurate attitude sensing
+* 📺 **OLED Telemetry Display**: Real-time flight data visualization (attitude, throttle, motor outputs)
+* 🔒 **Safety Features**: Arming sequence, throttle limits, and hardware initialization checks
+* 🏗️ **Clean Architecture**: Modular design with adapters, models, and controllers
+* ⚙️ **PlatformIO Integration**: Modern build system with dependency management
+
+## Hardware Requirements
+
+### Core Components
+
+* **ESP32-S3-DevKitC-1** (16MB flash, 8MB PSRAM recommended)
+* **4-in-1 ESC** (DShot600 compatible)
+* **3S LiPo Battery** (11.1V nominal)
+* **MPU6050** (6-axis gyroscope/accelerometer)
+* **nRF24L01** radio module
+* **SSD1306 OLED Display** (128x64, I2C)
+* **4x Brushless Motors** (matching your ESC specifications)
+
+### Pin Connections
+
+| Component | Pin | ESP32-S3 Pin | Notes |
+|-----------|-----|--------------|-------|
+| **I2C Bus** | | | |
+| OLED SDA | - | GPIO 17 | Shared I2C bus |
+| OLED SCL | - | GPIO 18 | Shared I2C bus |
+| MPU6050 SDA | - | GPIO 17 | Shared I2C bus |
+| MPU6050 SCL | - | GPIO 18 | Shared I2C bus |
+| OLED RST | - | GPIO 21 | Optional reset pin |
+| **Radio (SPI)** | | | |
+| nRF24L01 CE | - | GPIO 14 | Chip Enable |
+| nRF24L01 CSN | - | GPIO 9 | Chip Select |
+| nRF24L01 MOSI | - | GPIO 11 | SPI MOSI |
+| nRF24L01 MISO | - | GPIO 12 | SPI MISO |
+| nRF24L01 SCK | - | GPIO 13 | SPI Clock |
+| **Motors (DShot)** | | | |
+| Motor 1 (Rear Right, CCW) | - | GPIO 4 | RMT Channel 0 |
+| Motor 2 (Front Right, CW) | - | GPIO 5 | RMT Channel 1 |
+| Motor 3 (Rear Left, CW) | - | GPIO 6 | RMT Channel 2 |
+| Motor 4 (Front Left, CCW) | - | GPIO 7 | RMT Channel 3 |
+
+### Motor Configuration
+
+The drone uses a standard X-frame quadcopter configuration:
+
+```
+    M4 (FL)    M2 (FR)
+       \      /
+        \    /
+         \  /
+          \/
+         /\
+        /  \
+       /    \
+      /      \
+    M3 (RL)    M1 (RR)
+```
+
+* **M1**: Rear Right, Counter-Clockwise (CCW)
+* **M2**: Front Right, Clockwise (CW)
+* **M3**: Rear Left, Clockwise (CW)
+* **M4**: Front Left, Counter-Clockwise (CCW)
+
+## Software Architecture
+
+```
+cortex/
+├── src/
+│   ├── main.cpp                    # Main control loop & initialization
+│   ├── controllers/
+│   │   └── flight_controller.*     # Motor mixing matrix
+│   ├── adapters/
+│   │   ├── radio_adapter.*         # nRF24L01 communication
+│   │   ├── mpu_adapter.*           # MPU6050 sensor interface
+│   │   └── motor_adapter.*         # DShot ESC control (native)
+│   └── models/
+│       ├── attitude.*              # Attitude state & PID controllers
+│       ├── drone_command.*         # Command data structure
+│       └── motor_output.*          # Motor speed outputs
+└── platformio.ini                  # Build configuration
+```
+
+### Key Components
+
+* **FlightController**: Implements the motor mixing matrix for quadcopter control
+* **Attitude**: Manages sensor data and calculates PD/P control outputs
+* **RadioAdapter**: Handles nRF24L01 initialization and packet reception
+* **MPUAdapter**: Interfaces with MPU6050, handles calibration and filtering
+* **NativeDShot**: ESP32 RMT-based DShot600 implementation for direct ESC control
+
+### Control Loop
+
+The flight controller operates at approximately **1kHz** (1ms loop time):
+
+1. **Receive Radio**: Check for new command packets from transmitter
+2. **Read Sensors**: Update MPU6050 attitude data (roll, pitch, yaw rates)
+3. **Calculate PID**: Compute stabilization corrections for roll, pitch, and yaw
+4. **Mix Motors**: Apply motor mixing matrix to combine throttle and corrections
+5. **Write Motors**: Send DShot commands to all 4 ESCs
+
+A slower **3Hz** loop updates the OLED display with telemetry data.
+
+## Installation
+
+### Prerequisites
+
+1. **PlatformIO**: Install [PlatformIO IDE](https://platformio.org/install/ide?install=vscode) or use the CLI
+2. **USB Cable**: For uploading firmware to ESP32-S3
+3. **Synapse Transmitter**: Ensure the [Synapse](https://github.com/sergiovirahonda/synapse) transmitter is configured with matching radio address
+
+### Setup Steps
+
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/sergiovirahonda/cortex.git
+   cd cortex
+   ```
+
+2. **Install dependencies**
+   
+   PlatformIO will automatically install required libraries:
+   * `RF24` - nRF24L01 radio driver
+   * `MPU6050_light` - MPU6050 sensor library
+   * `Adafruit SSD1306` - OLED display driver
+   * `Adafruit GFX Library` - Graphics library for display
+
+3. **Configure radio address**
+   
+   Edit `src/main.cpp` to match your Synapse transmitter address:
+   ```cpp
+   byte NRF_RX_ADDRESS[6] = "00001";  // Must match transmitter address
+   ```
+
+4. **Build and upload**
+   ```bash
+   pio run -t upload
+   ```
+
+5. **Monitor serial output**
+   ```bash
+   pio device monitor
+   ```
+   
+   You should see initialization messages, calibration progress, and arming sequence.
+
+## Configuration
+
+### Radio Settings
+
+The radio adapter is configured to match the Synapse transmitter:
+
+* **Data Rate**: 250KBPS (longest range)
+* **Power Level**: PA_LOW (adjustable for range vs. power consumption)
+* **Channel**: 108 (above 2.48GHz to avoid WiFi interference)
+* **Auto-ACK**: Disabled (for lower latency)
+
+### PID Tuning
+
+PID gains are defined in `src/models/attitude.cpp`:
+
+```cpp
+// Roll & Pitch (PD Controller)
+const float KP_ROLL  = 2.0;   // Proportional gain
+const float KD_ROLL  = 0.20;  // Derivative gain
+
+const float KP_PITCH = 2.2;
+const float KD_PITCH = 0.12;
+
+// Yaw (P Controller)
+const float KP_YAW   = 4.0;
+```
+
+**Tuning Guidelines:**
+* **Kp (Proportional)**: Controls stiffness. Too low = sluggish, too high = oscillations
+* **Kd (Derivative)**: Dampens motion. Prevents overshoot and bounce
+* **Rule of Thumb**: Kp should be 10-20x larger than Kd for roll/pitch
+* Start with low values and increase gradually while testing
+
+### MPU6050 Calibration
+
+The MPU6050 uses hardware DLPF (Digital Low-Pass Filter) set to 44Hz bandwidth to reduce vibration noise. Software filtering is configured in `src/adapters/mpu_driver.cpp`:
+
+```cpp
+// Increase to 0.99 if angles jump when motors spin
+this->mpu->setFilterGyroCoef(0.99);
+
+// Accel offsets (calibrate for your specific MPU)
+this->mpu->setAccOffsets(-0.17, -0.16, -0.06);
+```
+
+**Calibration Process:**
+1. Place drone on level surface
+2. Power on and wait for calibration to complete
+3. If angles drift, adjust accel offsets in code
+4. If angles jump during flight, increase gyro filter coefficient
+
+### Motor Mixing
+
+The motor mixing matrix in `src/controllers/flight_controller.cpp` combines throttle and PID corrections:
+
+* **Pitch**: Nose down → Front motors (M2, M4) increase
+* **Roll**: Left side down → Left motors (M3, M4) increase
+* **Yaw**: Turn right (CW) → Clockwise motors (M2, M3) increase
+
+Adjust trim values in the mixing function if your drone drifts in a specific direction.
+
+### Safety Limits
+
+Motor outputs are clamped to safe ranges:
+
+```cpp
+const int MIN_THROTTLE_PWM = 50;   // Minimum DShot value
+const int MAX_THROTTLE_PWM = 2047; // Maximum DShot value
+```
+
+DShot protocol enforces a minimum value of 48 for safety (motors won't spin below this).
+
+## Usage
+
+### Arming Sequence
+
+The flight controller performs an automatic arming sequence on startup:
+
+1. **Initialization** (5 seconds)
+   * I2C bus setup
+   * OLED display initialization
+   * Radio hardware check
+   * MPU6050 calibration
+
+2. **Motor Wake-up** (3 seconds)
+   * Sends zero throttle to all ESCs
+   * Prepares ESCs for DShot communication
+
+3. **Friction Kick** (100ms)
+   * Brief high throttle pulse to overcome motor friction
+   * Ensures motors are ready to respond immediately
+
+4. **Idle State**
+   * Motors spin at low idle speed (200 DShot units)
+   * Drone is ready to receive commands
+
+**⚠️ WARNING**: Keep clear of propellers during arming sequence!
+
+### Flight Operation
+
+1. **Power on** the drone (3S LiPo battery)
+2. **Wait** for arming sequence to complete (OLED will show "SYSTEM RUNNING")
+3. **Verify** radio connection (check that commands are received)
+4. **Control** the drone using the Synapse transmitter
+5. **Monitor** telemetry on OLED display:
+   * Pitch/Roll angles
+   * Yaw rate
+   * Throttle percentage
+   * Individual motor speeds
+
+### OLED Display
+
+The display shows real-time flight data updated at 3Hz:
+
+```
+-- SYSTEM RUNNING --
+Pitch: 2.5 | Roll: -1.2
+Yaw: 0.8 | Throttle: 45
+M1: 250 | M2: 280
+M3: 240 | M4: 270
+```
+
+## Troubleshooting
+
+### Radio Not Receiving Commands
+
+* Verify nRF24L01 wiring (CE, CSN, SPI pins)
+* Check that radio address matches Synapse transmitter
+* Ensure transmitter is powered and sending commands
+* Verify radio channel and data rate settings match
+
+### MPU6050 Not Initializing
+
+* Check I2C wiring (SDA, SCL)
+* Verify MPU6050 is powered (3.3V)
+* Ensure I2C address is correct (0x68)
+* Check serial output for specific error messages
+
+### Motors Not Spinning
+
+* Verify DShot signal wiring (GPIO 4, 5, 6, 7)
+* Check ESC power supply (3S LiPo connected)
+* Ensure ESCs are DShot600 compatible
+* Verify arming sequence completed successfully
+* Check that throttle commands are being received
+
+### Drone Oscillating or Unstable
+
+* **Reduce PID gains**: Lower Kp and Kd values in `attitude.cpp`
+* **Increase DLPF**: Adjust hardware filter or increase software filter coefficient
+* **Check motor balance**: Ensure all motors spin smoothly
+* **Verify propellers**: Check for damage or incorrect mounting
+
+### Drone Drifting
+
+* **Calibrate MPU6050**: Re-run calibration on level surface
+* **Adjust motor mixing**: Add trim values in `flight_controller.cpp`
+* **Check motor direction**: Verify all motors spin in correct direction
+* **Balance propellers**: Unbalanced props cause vibration and drift
+
+## Development
+
+### Building
+
+```bash
+# Build project
+pio run
+
+# Upload to device
+pio run -t upload
+
+# Clean build artifacts
+pio run -t clean
+
+# Monitor serial output
+pio device monitor
+```
+
+### Code Structure
+
+* **Adapters**: Hardware interface layers (radio, MPU, motors)
+* **Models**: Data structures and business logic (attitude, commands, outputs)
+* **Controllers**: High-level control algorithms (flight controller, mixing)
+
+### Adding Features
+
+* **Altitude Hold**: Add barometer sensor and altitude PID loop
+* **GPS Navigation**: Integrate GPS module for position hold
+* **Telemetry Downlink**: Send flight data back to transmitter
+* **LED Indicators**: Add status LEDs for visual feedback
+
+## Related Projects
+
+* **[Synapse](https://github.com/sergiovirahonda/synapse)**: The transmitter controller that sends commands to Cortex
+
+## Safety Disclaimer
+
+⚠️ **WARNING**: This is experimental software for DIY drones. Always:
+
+* Test in a safe, open area away from people and property
+* Wear safety glasses when testing
+* Start with low throttle and gradually increase
+* Keep hands and body clear of propellers at all times
+* Ensure proper battery handling and charging safety
+* Follow local regulations regarding drone operation
+
+The authors are not responsible for any damage or injury resulting from the use of this software.
+
+## License
+
+This project is open source. See repository for license details.
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+---
+
+**Built with ❤️ for the DIY drone community**
