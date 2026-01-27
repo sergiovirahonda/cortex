@@ -165,6 +165,9 @@ void setup() {
   esc2.sendThrottle(200); 
   esc3.sendThrottle(200); 
   esc4.sendThrottle(200);
+
+  display.println("Resetting PID...");
+  attitude.resetPID();
 }
 
 void loop() {
@@ -181,10 +184,31 @@ void loop() {
   // B. Read Sensors
   mpuAdapter.getAttitude(attitude);
 
-  // C. Calculate PID
-  float pitchPD = attitude.calculatePitchPD(command.getPitch());
-  float rollPD  = attitude.calculateRollPD(command.getRoll());
-  float yawPD   = attitude.calculateYawP(command.getYaw());
+  // // C. Calculate PID
+  // float pitchPD = attitude.calculatePitchPD(command.getPitch());
+  // float rollPD  = attitude.calculateRollPD(command.getRoll());
+  // float yawPD   = attitude.calculateYawP(command.getYaw());
+
+  float pitchPD, rollPD, yawPD;
+
+  // 48 is our "Deadzone" (since we send 48 as min throttle in NativeDShot)
+  if (command.getThrottle() < 60) { 
+      // 1. If throttle is low, RESET the memory.
+      attitude.resetPID();
+      
+      // 2. Force PID corrections to Zero.
+      // This prevents the motors from twitching while on the ground.
+      pitchPD = 0;
+      rollPD  = 0;
+      yawPD   = 0;
+      
+  } else {
+      // 3. Only calculate PID if we are actually flying!
+      pitchPD = attitude.calculatePitchPD(command.getPitch());
+      rollPD  = attitude.calculateRollPD(command.getRoll());
+      yawPD   = attitude.calculateYawP(command.getYaw());
+  }
+  
 
   // D. Mix Motors
   flightController.computeMotorOutput(motorOutput, command, rollPD, pitchPD, yawPD);
