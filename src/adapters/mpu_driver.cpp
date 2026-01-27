@@ -23,7 +23,7 @@ void MPUAdapter::calibrate() {
     // This ensures "Level" is always "Level", even if you boot on a hill.
     // Offset -> X, Y, Z
     // before -.11
-    this->mpu->setAccOffsets(-0.17, -0.16, -0.06);
+    this->mpu->setAccOffsets(0.020, -0.019, -0.06);
     // 2. CALIBRATE GYRO ONLY (Every Boot)
     // This fixes drift. The drone must be STILL, but angle doesn't matter.
     // false = Don't touch Accel
