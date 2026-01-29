@@ -1,6 +1,24 @@
 #ifndef ATTITUDE_H
 #define ATTITUDE_H
 
+#include "../config/drone_config.h"
+
+class AttitudeTrim {
+    private:
+        float rollTrim;
+        float pitchTrim;
+        float yawTrim;
+    public:
+        AttitudeTrim();
+        void reset();
+        void setRollTrim(float rollTrim);
+        void setPitchTrim(float pitchTrim);
+        void setYawTrim(float yawTrim);
+        float getRollTrim();
+        float getPitchTrim();
+        float getYawTrim();
+};
+
 class Attitude {
 private:
     float rollAngle, rollRate;
@@ -14,8 +32,10 @@ private:
     // Previous Time for accurate I-calculation (Optional but recommended)
     unsigned long lastTime = 0;
 
+    DroneConfig droneConfig;
+
 public:
-        Attitude();
+        Attitude(const DroneConfig& droneConfig);
         void updateSensors(float rAngle, float rRate, float pAngle, float pRate, float yRate);
         // Raw getters
         float getRollAngle();
@@ -24,8 +44,8 @@ public:
         float getPitchRate();
         float getYawRate();
         // Calculate PID Outputs
-        float calculateRollPD(float desiredRollAngle);
-        float calculatePitchPD(float desiredPitchAngle);
+        float calculateRollPD(float desiredRollAngle, bool enableI);
+        float calculatePitchPD(float desiredPitchAngle, bool enableI);
         float calculateYawP(float desiredYawRate);
         // Add a reset method (Critical for safety!)
         void resetPID() {

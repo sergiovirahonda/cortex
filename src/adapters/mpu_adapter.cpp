@@ -2,6 +2,7 @@
 #include <MPU6050_light.h>
 #include <math.h>
 #include "mpu_adapter.h"
+#include "../config/drone_config.h"
 
 MPUAdapter::MPUAdapter(MPU6050 *mpu) {
     this->mpu = mpu;
@@ -14,7 +15,7 @@ void MPUAdapter::begin() {
     
 }
 
-void MPUAdapter::calibrate() {
+void MPUAdapter::calibrate(const DroneConfig& droneConfig) {
     // TUNE SOFTWARE FILTER
     // 0.98 is default. 
     // Increase to 0.99 if you see angles jumping when motors spin.
@@ -23,7 +24,11 @@ void MPUAdapter::calibrate() {
     // This ensures "Level" is always "Level", even if you boot on a hill.
     // Offset -> X, Y, Z
     // before -.11
-    this->mpu->setAccOffsets(0.020, -0.019, -0.06);
+    this->mpu->setAccOffsets(
+        droneConfig.getAccelXOffset(),
+        droneConfig.getAccelYOffset(),
+        droneConfig.getAccelZOffset()
+    );
     // 2. CALIBRATE GYRO ONLY (Every Boot)
     // This fixes drift. The drone must be STILL, but angle doesn't matter.
     // false = Don't touch Accel
