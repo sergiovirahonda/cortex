@@ -73,10 +73,6 @@ FlightController flightController;
 NativeDShotMotorAdapter esc1, esc2, esc3, esc4;
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RST);
 
-unsigned long lastTrimTime = 0;
-
-const int TRIM_DELAY = 150; 
-const float TRIM_STEP = 0.5;
 static unsigned long lastScreenUpdate = 0;
 
 void setup() {
@@ -214,61 +210,8 @@ void loop() {
   esc3.sendThrottle(motorOutput.getMotor3Speed());
   esc4.sendThrottle(motorOutput.getMotor4Speed());
 
-  // ============================================================
-  // 1. READ & UPDATE TRIMS (Using AttitudeTrim Object)
-  // ============================================================
-  
-  // Use the same debounce timer (declare these at top of main.cpp if you haven't)
-  // unsigned long lastTrimTime = 0;
-  // const int TRIM_DELAY = 150; 
-  // const float TRIM_STEP = 0.5;
-
-  if (millis() - lastTrimTime > droneConfig.getTrimDelay()) {
-      
-      bool trimChanged = false;
-      float step = droneConfig.getTrimStep();
-
-      // --- PITCH TRIM ---
-      if (command.getPitchTrim() == -1) { // FWD (Nose Down)
-          // Get current -> Add Step -> Set new
-          float current = attitudeTrim.getPitchTrim();
-          attitudeTrim.setPitchTrim(current + step); 
-          trimChanged = true;
-      }
-      if (command.getPitchTrim() == 1) { // BACK (Nose Up)
-          float current = attitudeTrim.getPitchTrim();
-          attitudeTrim.setPitchTrim(current - step);
-          trimChanged = true;
-      }
-
-      // --- ROLL TRIM ---
-      if (command.getRollTrim() == -1) { // LEFT
-          float current = attitudeTrim.getRollTrim();
-          attitudeTrim.setRollTrim(current + step); 
-          trimChanged = true;
-      }
-      if (command.getRollTrim() == 1) { // RIGHT
-          float current = attitudeTrim.getRollTrim();
-          attitudeTrim.setRollTrim(current - step); 
-          trimChanged = true;
-      }
-      
-      // --- YAW TRIM ---
-      if (command.getYawTrim() == 1) { // CW
-          float current = attitudeTrim.getYawTrim();
-          attitudeTrim.setYawTrim(current + step); 
-          trimChanged = true;
-      }
-      if (command.getYawTrim() == -1) { // CCW
-          float current = attitudeTrim.getYawTrim();
-          attitudeTrim.setYawTrim(current - step); 
-          trimChanged = true;
-      }
-      // --- TRIM RESET ---
-      if (command.getTrimReset() == 1) {
-          attitudeTrim.reset();
-      }
-  }
+  // Update trims from command (debounced inside FlightController)
+  flightController.updateTrims(command, attitudeTrim, droneConfig);
 
   // ================================================================
   // 2. SLOW LOOP (HUMAN INTERFACE)

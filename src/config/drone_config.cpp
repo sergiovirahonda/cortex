@@ -46,7 +46,7 @@ DroneConfig::DroneConfig() {
     // TRIM SETTINGS
     // =================================================================
     trimDelay = 500;
-    trimStep = 0.15;
+    trimStep = 0.10;
 }
 
 // Accelerometer offset getters
