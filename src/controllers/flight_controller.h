@@ -4,6 +4,7 @@
 #include "../models/attitude.h"
 #include "../models/motor_output.h"
 #include "../models/drone_command.h"
+#include "../config/drone_config.h"
 
 class FlightController {
     private:
@@ -11,6 +12,9 @@ class FlightController {
         unsigned long lastPacketTime;
         bool inFailsafe;
         int16_t failsafeThrottle;
+        
+        // Trim debounce state
+        unsigned long lastTrimTime;
         
         // Failsafe constants
         static const unsigned long FAILSAFE_TIMEOUT_MS = 500;
@@ -22,6 +26,7 @@ class FlightController {
         void updateFailsafe(bool packetReceived, int16_t currentThrottle);
         bool isInFailsafe() const;
         void applyFailsafe(DroneCommand& command);
+        void updateTrims(DroneCommand& command, AttitudeTrim& attitudeTrim, const DroneConfig& droneConfig);
         void computeAttitudeCorrections(
             DroneCommand& command,
             Attitude& attitude,

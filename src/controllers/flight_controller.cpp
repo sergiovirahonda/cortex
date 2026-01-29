@@ -1,6 +1,7 @@
 #include "flight_controller.h"
 #include "models/motor_output.h"
 #include "models/drone_command.h"
+#include "config/drone_config.h"
 
 #include <Arduino.h>
 
@@ -14,6 +15,43 @@ FlightController::FlightController() {
     lastPacketTime = 0;
     inFailsafe = false;
     failsafeThrottle = FAILSAFE_LANDING_THROTTLE;
+    lastTrimTime = 0;
+}
+
+void FlightController::updateTrims(DroneCommand& command, AttitudeTrim& attitudeTrim, const DroneConfig& droneConfig) {
+    // Debounce: only process trim updates at configured interval
+    if (millis() - lastTrimTime <= (unsigned long)droneConfig.getTrimDelay()) {
+        return;
+    }
+    lastTrimTime = millis();
+
+    float step = droneConfig.getTrimStep();
+
+    // Pitch trim: -1 = FWD (Nose Down), 1 = BACK (Nose Up)
+    if (command.getPitchTrim() == -1) {
+        attitudeTrim.setPitchTrim(attitudeTrim.getPitchTrim() + step);
+    } else if (command.getPitchTrim() == 1) {
+        attitudeTrim.setPitchTrim(attitudeTrim.getPitchTrim() - step);
+    }
+
+    // Roll trim: -1 = LEFT, 1 = RIGHT
+    if (command.getRollTrim() == -1) {
+        attitudeTrim.setRollTrim(attitudeTrim.getRollTrim() + step);
+    } else if (command.getRollTrim() == 1) {
+        attitudeTrim.setRollTrim(attitudeTrim.getRollTrim() - step);
+    }
+
+    // Yaw trim: 1 = CW, -1 = CCW
+    if (command.getYawTrim() == 1) {
+        attitudeTrim.setYawTrim(attitudeTrim.getYawTrim() + step);
+    } else if (command.getYawTrim() == -1) {
+        attitudeTrim.setYawTrim(attitudeTrim.getYawTrim() - step);
+    }
+
+    // Trim reset
+    if (command.getTrimReset() == 1) {
+        attitudeTrim.reset();
+    }
 }
 
 void FlightController::updateFailsafe(bool packetReceived, int16_t currentThrottle) {
@@ -65,6 +103,11 @@ void FlightController::applyFailsafe(DroneCommand& command) {
     }
 }
 
+// 2 stages PID algorithm:
+// 1. Low throttle - Reset PID and disable corrections
+// 2. Medium throttle (no takeoff yet) - PD control only (no I term)
+// 3. High throttle - Full PID control (with I term)
+// Only calculate full PID when actually flying
 void FlightController::computeAttitudeCorrections(
     DroneCommand& command,
     Attitude& attitude,
