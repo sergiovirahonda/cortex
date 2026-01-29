@@ -3,34 +3,51 @@
 #include <Arduino.h>
 
 // =================================================================
-// TUNING CONSTANTS (Single Loop Angle -> PWM)
+// ATTITUDE TRIM CLASS
 // =================================================================
 
-const float MAX_PD_OUTPUT = 350.0; // Limit correction to avoid overpowering throttle
+AttitudeTrim::AttitudeTrim() {
+    rollTrim = 0;
+    pitchTrim = 0;
+    yawTrim = 0;
+}
 
-// --- ROLL & PITCH GAINS ---
-// Kp: The "Spring". Stiffens the drone.
-// Kd: The "Damper". Stops the bounce.
-// Rule of Thumb: Kp should be 10x to 20x larger than Kd in this setup.
+void AttitudeTrim::reset() {
+    rollTrim = 0;
+    pitchTrim = 0;
+    yawTrim = 0;
+}
 
+void AttitudeTrim::setRollTrim(float rollTrim) {
+    this->rollTrim = rollTrim;
+}
 
-const float KP_ROLL  = 2.0;
-const float KI_ROLL  = 0.02;
-const float KD_ROLL  = 0.20;
+void AttitudeTrim::setPitchTrim(float pitchTrim) {
+    this->pitchTrim = pitchTrim;
+}
 
-const float KP_PITCH = 2.2;
-const float KI_PITCH = 0.02;
-const float KD_PITCH = 0.12;
+void AttitudeTrim::setYawTrim(float yawTrim) {
+    this->yawTrim = yawTrim;
+}
 
-const float MAX_I_OUTPUT = 75.0; // <--- SAFETY LIMIT
+float AttitudeTrim::getRollTrim() {
+    return this->rollTrim;
+}
 
-// --- YAW GAIN ---
-// Yaw is purely P-Controlled for now.
-const float KP_YAW   = 4.0;
+float AttitudeTrim::getPitchTrim() {
+    return this->pitchTrim;
+}
+
+float AttitudeTrim::getYawTrim() {
+    return this->yawTrim;
+}
 
 // =================================================================
+// ATTITUDE CLASS
+// =================================================================
 
-Attitude::Attitude() {
+Attitude::Attitude(const DroneConfig& droneConfig) {
+    this->droneConfig = droneConfig;
     rollAngle = 0;
     rollRate = 0;
     pitchAngle = 0;
@@ -57,45 +74,61 @@ float Attitude::getYawRate() { return this->yawRate; }
 // STABILIZATION LOGIC
 // =================================================================
 
-float Attitude::calculateRollPD(float desiredRollAngle) {
+float Attitude::calculateRollPD(float desiredRollAngle, bool enableI) {
     float error = desiredRollAngle - this->rollAngle;
     
-    // 1. P-TERM
-    float P = KP_ROLL * error;
+    float P = droneConfig.getRollKp() * error;
     
-    // 2. I-TERM (The New Magic)
-    // Accumulate the error
-    this->rollErrorSum += error; 
-    
-    // Constrain the memory (Anti-Windup) so it doesn't remember "too much"
-    this->rollErrorSum = constrain(this->rollErrorSum, -MAX_I_OUTPUT/KI_ROLL, MAX_I_OUTPUT/KI_ROLL);
-    
-    float I = KI_ROLL * this->rollErrorSum;
+    // --- I-TERM LOGIC ---
+    float I = 0;
+    if (enableI) {
+        // Only accumulate memory if we are flying!
+        this->rollErrorSum += error; 
+        this->rollErrorSum = constrain(
+            this->rollErrorSum,
+            -droneConfig.getMaxIOutput()/droneConfig.getRollKi(),
+            droneConfig.getMaxIOutput()/droneConfig.getRollKi()
+        );
+        I = droneConfig.getRollKi() * this->rollErrorSum;
+    } else {
+        // If on the ground, WIPE THE MEMORY.
+        this->rollErrorSum = 0; 
+        I = 0;
+    }
 
-    // 3. D-TERM
-    float D = KD_ROLL * this->rollRate; 
+    float D = droneConfig.getRollKd() * this->rollRate; 
     
-    float output = P + I - D; // Add I to the mix
-    return constrain(output, -MAX_PD_OUTPUT, MAX_PD_OUTPUT);
+    float output = P + I - D; 
+    return constrain(output, -droneConfig.getMaxPDOutput(), droneConfig.getMaxPDOutput());
 }
 
-float Attitude::calculatePitchPD(float desiredPitchAngle) {
+float Attitude::calculatePitchPD(float desiredPitchAngle, bool enableI) {
     float error = desiredPitchAngle - this->pitchAngle;
     
-    // 1. P-TERM
-    float P = KP_PITCH * error;
+    float P = droneConfig.getPitchKp() * error;
 
-    // 2. I-TERM
-    this->pitchErrorSum += error;
-    this->pitchErrorSum = constrain(this->pitchErrorSum, -MAX_I_OUTPUT/KI_PITCH, MAX_I_OUTPUT/KI_PITCH);
+    float I = 0;
+    if (enableI) {
+        this->pitchErrorSum += error;
+        this->pitchErrorSum = constrain(
+            this->pitchErrorSum,
+            -droneConfig.getMaxIOutput()/droneConfig.getPitchKi(),
+            droneConfig.getMaxIOutput()/droneConfig.getPitchKi()
+        );
+        I = droneConfig.getPitchKi() * this->pitchErrorSum;
+    } else {
+        this->pitchErrorSum = 0;
+        I = 0;
+    }
     
-    float I = KI_PITCH * this->pitchErrorSum;
-    
-    // 3. D-TERM
-    float D = KD_PITCH * this->pitchRate;
+    float D = droneConfig.getPitchKd() * this->pitchRate;
     
     float output = P + I - D;
-    return constrain(output, -MAX_PD_OUTPUT, MAX_PD_OUTPUT);
+    return constrain(
+        output,
+        -droneConfig.getMaxPDOutput(),
+        droneConfig.getMaxPDOutput()
+    );
 }
 
 // YAW strategy: "P-Only"
@@ -105,6 +138,10 @@ float Attitude::calculatePitchPD(float desiredPitchAngle) {
 float Attitude::calculateYawP(float desiredYawRate) {
     float error = desiredYawRate - this->yawRate;
     
-    float output = KP_YAW * error;
-    return constrain(output, -MAX_PD_OUTPUT, MAX_PD_OUTPUT);
+    float output = droneConfig.getYawKp() * error;
+    return constrain(
+        output,
+        -droneConfig.getMaxPDOutput(),
+        droneConfig.getMaxPDOutput()
+    );
 }

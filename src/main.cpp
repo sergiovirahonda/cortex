@@ -7,6 +7,7 @@
 #include "driver/rmt.h" 
 
 // Internal imports
+#include "config/drone_config.h"
 #include "models/attitude.h"
 #include "models/motor_output.h"
 #include "models/drone_command.h"
@@ -56,10 +57,12 @@ byte NRF_RX_ADDRESS[6] = "00001";
 // ADAPTER AND CONTROLLER OBJECTS
 // =================================================================
 
+DroneConfig droneConfig;
 DronePacket packet;
-Attitude attitude;
-DroneCommand command(0, 0, 0, 0);
+DroneCommand command(0, 0, 0, 0, 0, 0, 0, 0);
 MotorOutput motorOutput;
+Attitude attitude(droneConfig);
+AttitudeTrim attitudeTrim;
 RadioAdapter radioAdapter(
     RADIO_CE_PIN,
     RADIO_CSN_PIN,
@@ -69,6 +72,12 @@ MPUAdapter mpuAdapter(&mpu);
 FlightController flightController;
 NativeDShotMotorAdapter esc1, esc2, esc3, esc4;
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RST);
+
+unsigned long lastTrimTime = 0;
+
+const int TRIM_DELAY = 150; 
+const float TRIM_STEP = 0.5;
+static unsigned long lastScreenUpdate = 0;
 
 void setup() {
   Serial.begin(115200);
@@ -126,7 +135,7 @@ void setup() {
   // Increase to 0.99 if you see angles jumping when motors spin.
   display.println("Calibrating MPU9260...");
   display.display();
-  mpuAdapter.calibrate();
+  mpuAdapter.calibrate(droneConfig);
   display.println("Calibration completed.");
   display.display();
 
@@ -176,42 +185,28 @@ void loop() {
   // ================================================================
   
   // A. Receive Radio (Check if new packet arrived)
-  if (radioAdapter.receivePacket(packet)) {
+  bool packetReceived = radioAdapter.receivePacket(packet);
+  if (packetReceived) {
     command.loadFromPacket(packet);
     command.remap();
   }
+  
+  // Update failsafe state and apply failsafe if needed
+  // Pass current throttle to check if drone is flying before activating failsafe
+  flightController.updateFailsafe(packetReceived, command.getThrottle());
+  flightController.applyFailsafe(command);
 
   // B. Read Sensors
   mpuAdapter.getAttitude(attitude);
 
-  // // C. Calculate PID
-  // float pitchPD = attitude.calculatePitchPD(command.getPitch());
-  // float rollPD  = attitude.calculateRollPD(command.getRoll());
-  // float yawPD   = attitude.calculateYawP(command.getYaw());
+  // C. Calculate PID
 
   float pitchPD, rollPD, yawPD;
 
-  // 48 is our "Deadzone" (since we send 48 as min throttle in NativeDShot)
-  if (command.getThrottle() < 60) { 
-      // 1. If throttle is low, RESET the memory.
-      attitude.resetPID();
-      
-      // 2. Force PID corrections to Zero.
-      // This prevents the motors from twitching while on the ground.
-      pitchPD = 0;
-      rollPD  = 0;
-      yawPD   = 0;
-      
-  } else {
-      // 3. Only calculate PID if we are actually flying!
-      pitchPD = attitude.calculatePitchPD(command.getPitch());
-      rollPD  = attitude.calculateRollPD(command.getRoll());
-      yawPD   = attitude.calculateYawP(command.getYaw());
-  }
-  
+  flightController.computeAttitudeCorrections(command, attitude, pitchPD, rollPD, yawPD);
 
   // D. Mix Motors
-  flightController.computeMotorOutput(motorOutput, command, rollPD, pitchPD, yawPD);
+  flightController.computeMotorOutput(motorOutput, command, attitudeTrim, rollPD, pitchPD, yawPD);
 
   // E. WRITE TO MOTORS
   esc1.sendThrottle(motorOutput.getMotor1Speed());
@@ -219,19 +214,71 @@ void loop() {
   esc3.sendThrottle(motorOutput.getMotor3Speed());
   esc4.sendThrottle(motorOutput.getMotor4Speed());
 
-  // ================================================================
-  // 2. SLOW LOOP (HUMAN INTERFACE) - Runs every 3ms (3Hz)
-  // ================================================================
-  static unsigned long lastScreenUpdate = 0;
+  // ============================================================
+  // 1. READ & UPDATE TRIMS (Using AttitudeTrim Object)
+  // ============================================================
   
-  if (millis() - lastScreenUpdate > 300) { 
+  // Use the same debounce timer (declare these at top of main.cpp if you haven't)
+  // unsigned long lastTrimTime = 0;
+  // const int TRIM_DELAY = 150; 
+  // const float TRIM_STEP = 0.5;
+
+  if (millis() - lastTrimTime > droneConfig.getTrimDelay()) {
+      
+      bool trimChanged = false;
+      float step = droneConfig.getTrimStep();
+
+      // --- PITCH TRIM ---
+      if (command.getPitchTrim() == -1) { // FWD (Nose Down)
+          // Get current -> Add Step -> Set new
+          float current = attitudeTrim.getPitchTrim();
+          attitudeTrim.setPitchTrim(current + step); 
+          trimChanged = true;
+      }
+      if (command.getPitchTrim() == 1) { // BACK (Nose Up)
+          float current = attitudeTrim.getPitchTrim();
+          attitudeTrim.setPitchTrim(current - step);
+          trimChanged = true;
+      }
+
+      // --- ROLL TRIM ---
+      if (command.getRollTrim() == -1) { // LEFT
+          float current = attitudeTrim.getRollTrim();
+          attitudeTrim.setRollTrim(current + step); 
+          trimChanged = true;
+      }
+      if (command.getRollTrim() == 1) { // RIGHT
+          float current = attitudeTrim.getRollTrim();
+          attitudeTrim.setRollTrim(current - step); 
+          trimChanged = true;
+      }
+      
+      // --- YAW TRIM ---
+      if (command.getYawTrim() == 1) { // CW
+          float current = attitudeTrim.getYawTrim();
+          attitudeTrim.setYawTrim(current + step); 
+          trimChanged = true;
+      }
+      if (command.getYawTrim() == -1) { // CCW
+          float current = attitudeTrim.getYawTrim();
+          attitudeTrim.setYawTrim(current - step); 
+          trimChanged = true;
+      }
+      // --- TRIM RESET ---
+      if (command.getTrimReset() == 1) {
+          attitudeTrim.reset();
+      }
+  }
+
+  // ================================================================
+  // 2. SLOW LOOP (HUMAN INTERFACE)
+  // ================================================================
+  
+  if (millis() - lastScreenUpdate > 1000) { 
     
     // Refresh display
     display.clearDisplay();
     display.setCursor(0,0);
-    // Print to Buffer
-    display.println(F("-- SYSTEM RUNNING --"));
-  
     // Print readings
     display.print("Pitch: "); display.print(attitude.getPitchAngle());
     display.print(" | Roll: "); display.println(attitude.getRollAngle());
@@ -240,10 +287,13 @@ void loop() {
 
     // Print motor output PWM values
     display.print("M1: "); display.print(motorOutput.getMotor1Speed());
-    display.print(" | M2: "); display.println(motorOutput.getMotor1Speed());
-    // Print motor output PWM values
+    display.print(" | M2: "); display.println(motorOutput.getMotor2Speed());
     display.print("M3: "); display.print(motorOutput.getMotor3Speed());
-    display.print(" | M4: "); display.println(motorOutput.getMotor3Speed());
+    display.print(" | M4: "); display.println(motorOutput.getMotor4Speed());
+    display.print("Trims: ");
+    display.print("P: "); display.print(attitudeTrim.getPitchTrim());
+    display.print(" | R: "); display.print(attitudeTrim.getRollTrim());
+    display.print(" | Y: "); display.println(attitudeTrim.getYawTrim());
     
     display.display();
     lastScreenUpdate = millis();

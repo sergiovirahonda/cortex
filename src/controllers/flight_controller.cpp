@@ -10,11 +10,96 @@
 const int MIN_THROTTLE_PWM = 50;
 const int MAX_THROTTLE_PWM = 2047;
 
-FlightController::FlightController() {};
+FlightController::FlightController() {
+    lastPacketTime = 0;
+    inFailsafe = false;
+    failsafeThrottle = FAILSAFE_LANDING_THROTTLE;
+}
+
+void FlightController::updateFailsafe(bool packetReceived, int16_t currentThrottle) {
+    if (packetReceived) {
+        lastPacketTime = millis();
+        inFailsafe = false;
+    } else {
+        // Check for failsafe timeout
+        if (lastPacketTime > 0) {
+            unsigned long timeSinceLastPacket = millis() - lastPacketTime;
+            if (timeSinceLastPacket > FAILSAFE_TIMEOUT_MS) {
+                // Only activate failsafe if drone is actually flying (throttle >= 1000)
+                // If on ground (throttle < 1000), keep current throttle and don't try to land
+                if (currentThrottle >= FAILSAFE_LANDING_THROTTLE) {
+                    inFailsafe = true;
+                    
+                    // Gradually reduce throttle to landing speed
+                    if (failsafeThrottle > FAILSAFE_LANDING_THROTTLE) {
+                        failsafeThrottle -= FAILSAFE_THROTTLE_DECAY;
+                        if (failsafeThrottle < FAILSAFE_LANDING_THROTTLE) {
+                            failsafeThrottle = FAILSAFE_LANDING_THROTTLE;
+                        }
+                    }
+                } else {
+                    // On ground - exit failsafe and keep current throttle
+                    inFailsafe = false;
+                    failsafeThrottle = currentThrottle;
+                }
+            }
+        }
+    }
+}
+
+bool FlightController::isInFailsafe() const {
+    return inFailsafe;
+}
+
+void FlightController::applyFailsafe(DroneCommand& command) {
+    if (inFailsafe) {
+        // Override command with failsafe values (level attitude, reduced throttle)
+        command.setThrottle(failsafeThrottle);
+        command.setPitch(0);   // Level pitch
+        command.setRoll(0);    // Level roll
+        command.setYaw(0);     // No yaw rotation
+    } else {
+        // Track current throttle when not in failsafe
+        // This captures the throttle value before entering failsafe
+        failsafeThrottle = command.getThrottle();
+    }
+}
+
+void FlightController::computeAttitudeCorrections(
+    DroneCommand& command,
+    Attitude& attitude,
+    float& pitchPD,
+    float& rollPD,
+    float& yawPD
+) {
+    int16_t throttle = command.getThrottle();
+    
+    if (throttle < 60) {
+        // Range 1: Low throttle - Reset PID and disable corrections
+        // Prevents motors from twitching while on the ground
+        attitude.resetPID();
+        pitchPD = 0;
+        rollPD  = 0;
+        yawPD   = 0;
+    } else if (throttle < 1100) {
+        // Range 2: Medium throttle - PD control only (no I term)
+        // Avoids learning incorrect errors from ground contact
+        pitchPD = attitude.calculatePitchPD(command.getPitch(), false);
+        rollPD  = attitude.calculateRollPD(command.getRoll(), false);
+        yawPD   = attitude.calculateYawP(command.getYaw());
+    } else {
+        // Range 3: High throttle - Full PID control (with I term)
+        // Only calculate full PID when actually flying
+        pitchPD = attitude.calculatePitchPD(command.getPitch(), true);
+        rollPD  = attitude.calculateRollPD(command.getRoll(), true);
+        yawPD   = attitude.calculateYawP(command.getYaw());
+    }
+}
 
 void FlightController::computeMotorOutput(
     MotorOutput& motorOutput,
     DroneCommand& command,
+    AttitudeTrim& trim,
     float rollPD,
     float pitchPD,
     float yawPD
@@ -28,11 +113,13 @@ void FlightController::computeMotorOutput(
     // YAW:   Turn Right (CW) -> CW Motors (M2, M3) Increase
 
     int16_t throttle = command.getThrottle();
+    int16_t pitchTrim = trim.getPitchTrim();
+    int16_t rollTrim = trim.getRollTrim();
+    int16_t yawTrim = trim.getYawTrim();
 
-    float yaw_trim = 0.0; 
-    yawPD = yawPD + yaw_trim;
-
-    pitchPD = pitchPD - 30.0;
+    pitchPD = pitchPD - pitchTrim;
+    rollPD = rollPD - rollTrim;
+    yawPD = yawPD - yawTrim;
 
     // M4 (Front Left) - CCW
     int motor4Speed = throttle + pitchPD - rollPD + yawPD;
