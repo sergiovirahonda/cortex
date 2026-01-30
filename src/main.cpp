@@ -74,12 +74,15 @@ NativeDShotMotorAdapter esc1, esc2, esc3, esc4;
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RST);
 
 static unsigned long lastScreenUpdate = 0;
+static unsigned long lastLoopTime = 0;
+static float loopFrequencyHz = 0.0f;
 
 void setup() {
   Serial.begin(115200);
 
   // 1. Initialize I2C with your specific pins
   Wire.begin(I2C_SDA, I2C_SCL);
+  Wire.setClock(400000);  // 400 kHz I2C (MPU6050 & OLED support it; faster than default 100 kHz)
 
   // 2. Initialize OLED
   if(!display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDR)) {
@@ -180,6 +183,17 @@ void loop() {
   // 1. FAST LOOP (FLIGHT CRITICAL) - Runs every cycle (~1kHz)
   // ================================================================
   
+  // Measure loop frequency (running average so display shows ~average Hz, not fast/slow alternation)
+  unsigned long now = micros();
+  if (lastLoopTime > 0) {
+    unsigned long periodUs = now - lastLoopTime;
+    if (periodUs > 0) {
+      float instantHz = 1000000.0f / (float)periodUs;
+      loopFrequencyHz = 0.995f * loopFrequencyHz + 0.005f * instantHz;  // smooth toward ~1200 Hz
+    }
+  }
+  lastLoopTime = now;
+  
   // A. Receive Radio (Check if new packet arrived)
   bool packetReceived = radioAdapter.receivePacket(packet);
   if (packetReceived) {
@@ -192,8 +206,11 @@ void loop() {
   flightController.updateFailsafe(packetReceived, command.getThrottle());
   flightController.applyFailsafe(command);
 
-  // B. Read Sensors
-  mpuAdapter.getAttitude(attitude);
+  // B. Read Sensors (every 2nd loop to keep ~1 kHz loop rate; attitude ~600 Hz is fine for stability)
+  static uint32_t loopCount = 0;
+  if ((loopCount++ & 1) == 0) {
+    mpuAdapter.getAttitude(attitude);
+  }
 
   // C. Calculate PID
 
@@ -222,11 +239,13 @@ void loop() {
     // Refresh display
     display.clearDisplay();
     display.setCursor(0,0);
+    // Loop frequency
+    display.print("- @ "); display.print((int)loopFrequencyHz); display.println(" Hz -");
     // Print readings
-    display.print("Pitch: "); display.print(attitude.getPitchAngle());
-    display.print(" | Roll: "); display.println(attitude.getRollAngle());
-    display.print("Yaw: "); display.print(attitude.getYawRate());
-    display.print(" | Throttle: "); display.println(command.getThrottle());
+    display.print("P: "); display.print(attitude.getPitchAngle());
+    display.print(" | R: "); display.println(attitude.getRollAngle());
+    display.print("Y: "); display.print(attitude.getYawRate());
+    display.print(" | T: "); display.println(command.getThrottle());
 
     // Print motor output PWM values
     display.print("M1: "); display.print(motorOutput.getMotor1Speed());
