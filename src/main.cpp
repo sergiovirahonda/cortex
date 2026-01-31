@@ -82,7 +82,7 @@ void setup() {
 
   // 1. Initialize I2C with your specific pins
   Wire.begin(I2C_SDA, I2C_SCL);
-  Wire.setClock(400000);  // 400 kHz I2C (MPU6050 & OLED support it; faster than default 100 kHz)
+  Wire.setClock(400000); // Set I2C to 400kHz (Fast Mode)
 
   // 2. Initialize OLED
   if(!display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDR)) {
@@ -206,11 +206,8 @@ void loop() {
   flightController.updateFailsafe(packetReceived, command.getThrottle());
   flightController.applyFailsafe(command);
 
-  // B. Read Sensors (every 2nd loop to keep ~1 kHz loop rate; attitude ~600 Hz is fine for stability)
-  static uint32_t loopCount = 0;
-  if ((loopCount++ & 1) == 0) {
-    mpuAdapter.getAttitude(attitude);
-  }
+  // B. Read Sensors
+  mpuAdapter.getAttitude(attitude);
 
   // C. Calculate PID
 

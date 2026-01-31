@@ -19,7 +19,7 @@ void MPUAdapter::calibrate(const DroneConfig& droneConfig) {
     // TUNE SOFTWARE FILTER
     // 0.98 is default. 
     // Increase to 0.99 if you see angles jumping when motors spin.
-    this->mpu->setFilterGyroCoef(0.99);
+    this->mpu->setFilterGyroCoef(0.995);
     // 1. LOAD SAVED ACCEL DATA
     // This ensures "Level" is always "Level", even if you boot on a hill.
     // Offset -> X, Y, Z
