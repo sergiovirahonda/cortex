@@ -258,8 +258,10 @@ void loop() {
     display.print(" | R: "); display.print(attitudeTrim.getRollTrim());
     display.print(" | Y: "); display.println(attitudeTrim.getYawTrim());
     // BME280: altitude (read only in screen loop)
-    float altM = bme280Adapter.readAltitudeMeters();
-    display.print("Alt: "); display.print(altM, 1); display.println(" m");
+    if (droneConfig.getFeatureFlagEnableAltitudeReading()) {
+      float altM = bme280Adapter.readAltitudeMeters();
+      display.print("Alt: "); display.print(altM, 1); display.println(" m");
+    }
     display.display();
     lastScreenUpdate = millis();
   }
