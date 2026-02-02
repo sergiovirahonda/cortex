@@ -29,8 +29,9 @@ private:
     float rollErrorSum = 0;
     float pitchErrorSum = 0;
     
-    // Previous Time for accurate I-calculation (Optional but recommended)
+    // Time for loop-rate-independent integral (dt in seconds)
     unsigned long lastTime = 0;
+    float lastDt = 0.0f;  // dt used for this loop (shared by roll/pitch)
 
     DroneConfig droneConfig;
 

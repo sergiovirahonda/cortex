@@ -80,9 +80,8 @@ void DroneCommand::loadFromPacket(DronePacket pkt) {
 
 // --- LOGIC ---
 void DroneCommand::remap() {
-    // 1. Throttle: Map 0-100% input to DShot Range (e.g., 50 to 2047)
-    // Note: We use long for the calculation to prevent overflow, then cast back
-    int32_t baseThrottle = map(this->throttle, 0, 50, MIN_THROTTLE_PWM, MAX_THROTTLE_PWM);
+    // 1. Throttle: Map stick input to DShot range (50–2047).
+    int32_t baseThrottle = map(this->throttle, 0, 100, MIN_THROTTLE_PWM, MAX_THROTTLE_PWM);
 
     // 2. Pitch/Roll: Map -100 to 100 input to Angle degrees (e.g., -30 to 30)
     int32_t desiredPitchAngle = map(this->pitch, -100, 100, -MAX_ANGLE_DEGREES, MAX_ANGLE_DEGREES);
