@@ -14,6 +14,7 @@
 #include "adapters/radio_adapter.h"
 #include "adapters/mpu_adapter.h"
 #include "adapters/motor_adapter.h"
+#include "adapters/bmp280_adapter.h"
 #include "controllers/flight_controller.h"
 
 
@@ -69,6 +70,7 @@ RadioAdapter radioAdapter(
     NRF_RX_ADDRESS
 );
 MPUAdapter mpuAdapter(&mpu);
+BME280Adapter bme280Adapter(&Wire);
 FlightController flightController;
 NativeDShotMotorAdapter esc1, esc2, esc3, esc4;
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RST);
@@ -116,8 +118,10 @@ void setup() {
     while (1); // Stop here
   }
   mpuAdapter.begin();
+  bme280Adapter.begin();
   display.println("Radio status: OK");
   display.println("MPU status: OK");
+  display.println(bme280Adapter.isConnected() ? "BME280: OK" : "BME280: --");
   display.display();
   delay(5);
 
@@ -253,7 +257,9 @@ void loop() {
     display.print("P: "); display.print(attitudeTrim.getPitchTrim());
     display.print(" | R: "); display.print(attitudeTrim.getRollTrim());
     display.print(" | Y: "); display.println(attitudeTrim.getYawTrim());
-    
+    // BME280: altitude (read only in screen loop)
+    float altM = bme280Adapter.readAltitudeMeters();
+    display.print("Alt: "); display.print(altM, 1); display.println(" m");
     display.display();
     lastScreenUpdate = millis();
   }

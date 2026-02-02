@@ -71,64 +71,61 @@ float Attitude::getPitchRate() { return this->pitchRate; }
 float Attitude::getYawRate() { return this->yawRate; }
 
 // =================================================================
-// STABILIZATION LOGIC
+// STABILIZATION LOGIC (PID with dt for loop-rate independence)
 // =================================================================
+// dt in seconds; I-term uses error*dt so Ki is "per second". enableI: false
+// before takeoff (avoids integrating ground-contact error), true when flying.
 
 float Attitude::calculateRollPD(float desiredRollAngle, bool enableI) {
+    unsigned long now = micros();
+    float dt = (lastTime > 0) ? (now - lastTime) / 1e6f : (1.0f / 570.0f);
+    if (dt <= 0.0f || dt > 0.02f) dt = 1.0f / 570.0f;  // clamp first run / glitches
+    lastTime = now;
+    lastDt = dt;
+
     float error = desiredRollAngle - this->rollAngle;
-    
     float P = droneConfig.getRollKp() * error;
-    
-    // --- I-TERM LOGIC ---
+
     float I = 0;
     if (enableI) {
-        // Only accumulate memory if we are flying!
-        this->rollErrorSum += error; 
+        this->rollErrorSum += error * dt;
         this->rollErrorSum = constrain(
             this->rollErrorSum,
-            -droneConfig.getMaxIOutput()/droneConfig.getRollKi(),
-            droneConfig.getMaxIOutput()/droneConfig.getRollKi()
+            -droneConfig.getMaxIOutput() / droneConfig.getRollKi(),
+            droneConfig.getMaxIOutput() / droneConfig.getRollKi()
         );
         I = droneConfig.getRollKi() * this->rollErrorSum;
     } else {
-        // If on the ground, WIPE THE MEMORY.
-        this->rollErrorSum = 0; 
-        I = 0;
+        this->rollErrorSum = 0;
     }
 
-    float D = droneConfig.getRollKd() * this->rollRate; 
-    
-    float output = P + I - D; 
+    float D = droneConfig.getRollKd() * this->rollRate;
+    float output = P + I - D;
     return constrain(output, -droneConfig.getMaxPDOutput(), droneConfig.getMaxPDOutput());
 }
 
 float Attitude::calculatePitchPD(float desiredPitchAngle, bool enableI) {
+    float dt = lastDt;
+
     float error = desiredPitchAngle - this->pitchAngle;
-    
     float P = droneConfig.getPitchKp() * error;
 
     float I = 0;
     if (enableI) {
-        this->pitchErrorSum += error;
+        this->pitchErrorSum += error * dt;
         this->pitchErrorSum = constrain(
             this->pitchErrorSum,
-            -droneConfig.getMaxIOutput()/droneConfig.getPitchKi(),
-            droneConfig.getMaxIOutput()/droneConfig.getPitchKi()
+            -droneConfig.getMaxIOutput() / droneConfig.getPitchKi(),
+            droneConfig.getMaxIOutput() / droneConfig.getPitchKi()
         );
         I = droneConfig.getPitchKi() * this->pitchErrorSum;
     } else {
         this->pitchErrorSum = 0;
-        I = 0;
     }
-    
+
     float D = droneConfig.getPitchKd() * this->pitchRate;
-    
     float output = P + I - D;
-    return constrain(
-        output,
-        -droneConfig.getMaxPDOutput(),
-        droneConfig.getMaxPDOutput()
-    );
+    return constrain(output, -droneConfig.getMaxPDOutput(), droneConfig.getMaxPDOutput());
 }
 
 // YAW strategy: "P-Only"

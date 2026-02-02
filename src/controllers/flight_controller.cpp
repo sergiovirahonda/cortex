@@ -103,11 +103,13 @@ void FlightController::applyFailsafe(DroneCommand& command) {
     }
 }
 
-// 2 stages PID algorithm:
-// 1. Low throttle - Reset PID and disable corrections
-// 2. Medium throttle (no takeoff yet) - PD control only (no I term)
-// 3. High throttle - Full PID control (with I term)
-// Only calculate full PID when actually flying
+// Throttle bands for two-stage PID (see attitude.cpp for I-term rationale).
+// I is disabled below FLYING_THROTTLE to avoid integrating ground-contact "error".
+static const int16_t IDLE_THROTTLE = 60;       // below: no corrections, PID reset
+static const int16_t FLYING_THROTTLE = 1100;   // above: full PID (I enabled)
+
+// Two-stage attitude correction: low = off, medium = PD only, high = full PID.
+// Trim stays in the mix (PWM bias); setpoint is always stick (0 = level).
 void FlightController::computeAttitudeCorrections(
     DroneCommand& command,
     Attitude& attitude,
@@ -116,23 +118,17 @@ void FlightController::computeAttitudeCorrections(
     float& yawPD
 ) {
     int16_t throttle = command.getThrottle();
-    
-    if (throttle < 60) {
-        // Range 1: Low throttle - Reset PID and disable corrections
-        // Prevents motors from twitching while on the ground
+
+    if (throttle < IDLE_THROTTLE) {
         attitude.resetPID();
         pitchPD = 0;
         rollPD  = 0;
         yawPD   = 0;
-    } else if (throttle < 1100) {
-        // Range 2: Medium throttle - PD control only (no I term)
-        // Avoids learning incorrect errors from ground contact
+    } else if (throttle < FLYING_THROTTLE) {
         pitchPD = attitude.calculatePitchPD(command.getPitch(), false);
         rollPD  = attitude.calculateRollPD(command.getRoll(), false);
         yawPD   = attitude.calculateYawP(command.getYaw());
     } else {
-        // Range 3: High throttle - Full PID control (with I term)
-        // Only calculate full PID when actually flying
         pitchPD = attitude.calculatePitchPD(command.getPitch(), true);
         rollPD  = attitude.calculateRollPD(command.getRoll(), true);
         yawPD   = attitude.calculateYawP(command.getYaw());
@@ -156,9 +152,9 @@ void FlightController::computeMotorOutput(
     // YAW:   Turn Right (CW) -> CW Motors (M2, M3) Increase
 
     int16_t throttle = command.getThrottle();
-    int16_t pitchTrim = trim.getPitchTrim();
-    int16_t rollTrim = trim.getRollTrim();
-    int16_t yawTrim = trim.getYawTrim();
+    float pitchTrim = trim.getPitchTrim();
+    float rollTrim = trim.getRollTrim();
+    float yawTrim = trim.getYawTrim();
 
     pitchPD = pitchPD - pitchTrim;
     rollPD = rollPD - rollTrim;

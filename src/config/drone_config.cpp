@@ -5,31 +5,25 @@ DroneConfig::DroneConfig() {
     // ACCELEROMETER OFFSETS
     // =================================================================
     // These offsets ensure "Level" is always "Level", even if you boot on a hill
-    // Commented out for now as it's not working
-    // accelOffsets.xOffset = -0.03; //  Towards negative -> Tilt to the right
-    // accelOffsets.yOffset = -0.07; // Towards negative -> Tilt to the front
-    // accelOffsets.zOffset = -0.06; // MPU readings standard
     // Leveled offset values
     accelOffsets.xOffset = 0.04; //  Towards negative -> Tilt to the right
     accelOffsets.yOffset = -0.0098; // Towards negative -> Tilt to the front
     accelOffsets.zOffset = -0.06; // MPU readings standard
     
     // =================================================================
-    // PID GAINS
+    // PID GAINS (Mark4 7" wide X, 1300 KV, 8" props, ~570 Hz loop)
     // =================================================================
-    // Kp: The "Spring". Stiffens the drone.
-    // Ki: The "Integral". Eliminates steady-state error.
-    // Kd: The "Damper". Stops the bounce.
-    // Rule of Thumb: Kp should be 10x to 20x larger than Kd in this setup.
-    
-    // Roll PID gains
+    // PID uses dt (seconds); I-term is error*dt so Ki is per-second. Wide X:
+    // roll/pitch inertia similar; Kp ~10–20× Kd. Tune P first, then D, then I.
+    //
+    // Roll PID
     rollPID.kp = 2.0;
-    rollPID.ki = 0.02;
+    rollPID.ki = 10.0;
     rollPID.kd = 0.20;
-    
-    // Pitch PID gains
+
+    // Pitch PID (slightly stiffer P, less D if frame is symmetric)
     pitchPID.kp = 2.2;
-    pitchPID.ki = 0.02;
+    pitchPID.ki = 10.0;
     pitchPID.kd = 0.12;
     
     // Yaw gain (P-only control)
