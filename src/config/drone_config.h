@@ -33,6 +33,9 @@ class DroneConfig {
         int trimDelay;
         float trimStep;
     
+        // Feature flags
+        bool featureFlagEnableAltitudeReading;
+    
     public:
         DroneConfig();
         
@@ -64,6 +67,9 @@ class DroneConfig {
         // Trim settings getters
         int getTrimDelay() const;
         float getTrimStep() const;
+    
+        // Feature flags getters
+        bool getFeatureFlagEnableAltitudeReading() const;
 };
 
 #endif

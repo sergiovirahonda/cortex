@@ -41,6 +41,11 @@ DroneConfig::DroneConfig() {
     // =================================================================
     trimDelay = 250;
     trimStep = 5.0;
+
+    // =================================================================
+    // FEATURE FLAGS
+    // =================================================================
+    featureFlagEnableAltitudeReading = false;
 }
 
 // Accelerometer offset getters
@@ -118,3 +123,7 @@ float DroneConfig::getTrimStep() const {
     return trimStep;
 }
 
+// Feature flags getters
+bool DroneConfig::getFeatureFlagEnableAltitudeReading() const {
+    return featureFlagEnableAltitudeReading;
+}
