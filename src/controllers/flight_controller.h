@@ -30,6 +30,7 @@ class FlightController {
         void computeAttitudeCorrections(
             DroneCommand& command,
             Attitude& attitude,
+            AttitudeTrim& trim,
             float& pitchPD,
             float& rollPD,
             float& yawPD

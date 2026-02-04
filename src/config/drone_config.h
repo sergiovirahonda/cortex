@@ -29,9 +29,10 @@ class DroneConfig {
         float maxPDOutput;
         float maxIOutput;
     
-        // Trim configurations
+        // Trim configurations (degrees / deg/s; applied as setpoint offset)
         int trimDelay;
-        float trimStep;
+        float trimStepPitchRollDeg;  // degrees per step (pitch, roll)
+        float trimStepYawDegPerSec;  // deg/s per step (yaw)
     
         // Feature flags
         bool featureFlagEnableAltitudeReading;
@@ -66,7 +67,8 @@ class DroneConfig {
     
         // Trim settings getters
         int getTrimDelay() const;
-        float getTrimStep() const;
+        float getTrimStepPitchRollDeg() const;
+        float getTrimStepYawDegPerSec() const;
     
         // Feature flags getters
         bool getFeatureFlagEnableAltitudeReading() const;
