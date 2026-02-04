@@ -6,9 +6,9 @@ DroneConfig::DroneConfig() {
     // =================================================================
     // These offsets ensure "Level" is always "Level", even if you boot on a hill
     // Leveled offset values
-    accelOffsets.xOffset = 0.045; //  Towards negative -> Tilt to the right
-    accelOffsets.yOffset = 0.001; // Towards negative -> Tilt forward
-    accelOffsets.zOffset = -0.06; // MPU readings standard
+    accelOffsets.xOffset = 0.0215;    //  Towards negative -> Tilt to the right
+    accelOffsets.yOffset = -0.0035;   // Towards negative -> Tilt forward
+    accelOffsets.zOffset = -0.0600;   // MPU readings standard
     
     // =================================================================
     // PID GAINS (Mark4 7" wide X, 1300 KV, 8" props, ~570 Hz loop)
@@ -37,10 +37,11 @@ DroneConfig::DroneConfig() {
     maxIOutput = 75.0;    // Safety limit for integral term
 
     // =================================================================
-    // TRIM SETTINGS
+    // TRIM SETTINGS (degrees / deg/s; trim is setpoint offset, not PWM)
     // =================================================================
-    trimDelay = 250;
-    trimStep = 5.0;
+    trimDelay = 250;              // ms between trim steps (debounce)
+    trimStepPitchRollDeg = 0.2f;  // degrees per step (safe, fine adjustment)
+    trimStepYawDegPerSec = 2.0f;  // deg/s per step (yaw rate trim)
 
     // =================================================================
     // FEATURE FLAGS
@@ -114,13 +115,16 @@ float DroneConfig::getMaxIOutput() const {
 }
 
 // Trim settings getters
-
 int DroneConfig::getTrimDelay() const {
     return trimDelay;
 }
 
-float DroneConfig::getTrimStep() const {
-    return trimStep;
+float DroneConfig::getTrimStepPitchRollDeg() const {
+    return trimStepPitchRollDeg;
+}
+
+float DroneConfig::getTrimStepYawDegPerSec() const {
+    return trimStepYawDegPerSec;
 }
 
 // Feature flags getters

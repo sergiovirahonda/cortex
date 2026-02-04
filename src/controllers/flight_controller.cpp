@@ -19,36 +19,35 @@ FlightController::FlightController() {
 }
 
 void FlightController::updateTrims(DroneCommand& command, AttitudeTrim& attitudeTrim, const DroneConfig& droneConfig) {
-    // Debounce: only process trim updates at configured interval
     if (millis() - lastTrimTime <= (unsigned long)droneConfig.getTrimDelay()) {
         return;
     }
     lastTrimTime = millis();
 
-    float step = droneConfig.getTrimStep();
+    float stepDeg = droneConfig.getTrimStepPitchRollDeg();   // degrees (pitch, roll)
+    float stepYaw = droneConfig.getTrimStepYawDegPerSec();  // deg/s (yaw)
 
-    // Pitch trim: -1 = FWD (Nose Down), 1 = BACK (Nose Up)
+    // Pitch trim: -1 = FWD (Nose Down), 1 = BACK (Nose Up). Trim in degrees.
     if (command.getPitchTrim() == -1) {
-        attitudeTrim.setPitchTrim(attitudeTrim.getPitchTrim() + step);
+        attitudeTrim.setPitchTrim(attitudeTrim.getPitchTrim() + stepDeg);
     } else if (command.getPitchTrim() == 1) {
-        attitudeTrim.setPitchTrim(attitudeTrim.getPitchTrim() - step);
+        attitudeTrim.setPitchTrim(attitudeTrim.getPitchTrim() - stepDeg);
     }
 
-    // Roll trim: -1 = LEFT, 1 = RIGHT
+    // Roll trim: -1 = LEFT, 1 = RIGHT. Trim in degrees.
     if (command.getRollTrim() == -1) {
-        attitudeTrim.setRollTrim(attitudeTrim.getRollTrim() + step);
+        attitudeTrim.setRollTrim(attitudeTrim.getRollTrim() + stepDeg);
     } else if (command.getRollTrim() == 1) {
-        attitudeTrim.setRollTrim(attitudeTrim.getRollTrim() - step);
+        attitudeTrim.setRollTrim(attitudeTrim.getRollTrim() - stepDeg);
     }
 
-    // Yaw trim: 1 = CW, -1 = CCW
+    // Yaw trim: 1 = CW, -1 = CCW. Trim in deg/s (rate).
     if (command.getYawTrim() == 1) {
-        attitudeTrim.setYawTrim(attitudeTrim.getYawTrim() + step);
+        attitudeTrim.setYawTrim(attitudeTrim.getYawTrim() + stepYaw);
     } else if (command.getYawTrim() == -1) {
-        attitudeTrim.setYawTrim(attitudeTrim.getYawTrim() - step);
+        attitudeTrim.setYawTrim(attitudeTrim.getYawTrim() - stepYaw);
     }
 
-    // Trim reset
     if (command.getTrimReset() == 1) {
         attitudeTrim.reset();
     }
@@ -109,15 +108,20 @@ static const int16_t IDLE_THROTTLE = 60;       // below: no corrections, PID res
 static const int16_t FLYING_THROTTLE = 1100;   // above: full PID (I enabled)
 
 // Two-stage attitude correction: low = off, medium = PD only, high = full PID.
-// Trim stays in the mix (PWM bias); setpoint is always stick (0 = level).
+// Trim is in degrees/deg/s and added to setpoint so I-term does not fight trim.
 void FlightController::computeAttitudeCorrections(
     DroneCommand& command,
     Attitude& attitude,
+    AttitudeTrim& trim,
     float& pitchPD,
     float& rollPD,
     float& yawPD
 ) {
     int16_t throttle = command.getThrottle();
+
+    float desiredPitch = (float)command.getPitch() + trim.getPitchTrim();  // degrees
+    float desiredRoll  = (float)command.getRoll()  + trim.getRollTrim();   // degrees
+    float desiredYaw   = (float)command.getYaw()  + trim.getYawTrim();     // deg/s
 
     if (throttle < IDLE_THROTTLE) {
         attitude.resetPID();
@@ -125,13 +129,13 @@ void FlightController::computeAttitudeCorrections(
         rollPD  = 0;
         yawPD   = 0;
     } else if (throttle < FLYING_THROTTLE) {
-        pitchPD = attitude.calculatePitchPD(command.getPitch(), false);
-        rollPD  = attitude.calculateRollPD(command.getRoll(), false);
-        yawPD   = attitude.calculateYawP(command.getYaw());
+        pitchPD = attitude.calculatePitchPD(desiredPitch, false);
+        rollPD  = attitude.calculateRollPD(desiredRoll, false);
+        yawPD   = attitude.calculateYawP(desiredYaw);
     } else {
-        pitchPD = attitude.calculatePitchPD(command.getPitch(), true);
-        rollPD  = attitude.calculateRollPD(command.getRoll(), true);
-        yawPD   = attitude.calculateYawP(command.getYaw());
+        pitchPD = attitude.calculatePitchPD(desiredPitch, true);
+        rollPD  = attitude.calculateRollPD(desiredRoll, true);
+        yawPD   = attitude.calculateYawP(desiredYaw);
     }
 }
 
@@ -150,15 +154,9 @@ void FlightController::computeMotorOutput(
     // PITCH: Nose Down -> Front Motors (M4, M2) Increase
     // ROLL:  Left Side Down -> Left Motors (M4, M3) Increase
     // YAW:   Turn Right (CW) -> CW Motors (M2, M3) Increase
+    // Trim is applied as setpoint offset in computeAttitudeCorrections, not here.
 
     int16_t throttle = command.getThrottle();
-    float pitchTrim = trim.getPitchTrim();
-    float rollTrim = trim.getRollTrim();
-    float yawTrim = trim.getYawTrim();
-
-    pitchPD = pitchPD - pitchTrim;
-    rollPD = rollPD - rollTrim;
-    yawPD = yawPD - yawTrim;
 
     // M4 (Front Left) - CCW
     int motor4Speed = throttle + pitchPD - rollPD + yawPD;
