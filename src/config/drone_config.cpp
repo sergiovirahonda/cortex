@@ -6,8 +6,8 @@ DroneConfig::DroneConfig() {
     // =================================================================
     // These offsets ensure "Level" is always "Level", even if you boot on a hill
     // Leveled offset values
-    accelOffsets.xOffset = 0.04; //  Towards negative -> Tilt to the right
-    accelOffsets.yOffset = -0.0098; // Towards negative -> Tilt to the front
+    accelOffsets.xOffset = 0.045; //  Towards negative -> Tilt to the right
+    accelOffsets.yOffset = 0.001; // Towards negative -> Tilt forward
     accelOffsets.zOffset = -0.06; // MPU readings standard
     
     // =================================================================
@@ -17,14 +17,14 @@ DroneConfig::DroneConfig() {
     // roll/pitch inertia similar; Kp ~10–20× Kd. Tune P first, then D, then I.
     //
     // Roll PID
-    rollPID.kp = 2.0;
-    rollPID.ki = 10.0;
-    rollPID.kd = 0.20;
+    rollPID.kp = 6.50;
+    rollPID.ki = 1.50;
+    rollPID.kd = 1.20;
 
     // Pitch PID (slightly stiffer P, less D if frame is symmetric)
-    pitchPID.kp = 2.2;
-    pitchPID.ki = 10.0;
-    pitchPID.kd = 0.12;
+    pitchPID.kp = 6.50;
+    pitchPID.ki = 1.50;
+    pitchPID.kd = 1.20;
     
     // Yaw gain (P-only control)
     kpYaw = 4.0;
