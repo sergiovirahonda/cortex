@@ -85,9 +85,10 @@ float Attitude::calculateRollPD(float desiredRollAngle, bool enableI) {
 
     float error = desiredRollAngle - this->rollAngle;
     float P = droneConfig.getRollKp() * error;
+    float kI = droneConfig.getRollKi();
 
     float I = 0;
-    if (enableI) {
+    if (enableI && kI > 0.0f) {
         this->rollErrorSum += error * dt;
         this->rollErrorSum = constrain(
             this->rollErrorSum,
@@ -97,6 +98,7 @@ float Attitude::calculateRollPD(float desiredRollAngle, bool enableI) {
         I = droneConfig.getRollKi() * this->rollErrorSum;
     } else {
         this->rollErrorSum = 0;
+        I = 0;
     }
 
     float D = droneConfig.getRollKd() * this->rollRate;
@@ -109,9 +111,10 @@ float Attitude::calculatePitchPD(float desiredPitchAngle, bool enableI) {
 
     float error = desiredPitchAngle - this->pitchAngle;
     float P = droneConfig.getPitchKp() * error;
+    float kI = droneConfig.getRollKi();
 
     float I = 0;
-    if (enableI) {
+    if (enableI && kI > 0.0f) {
         this->pitchErrorSum += error * dt;
         this->pitchErrorSum = constrain(
             this->pitchErrorSum,
@@ -121,6 +124,7 @@ float Attitude::calculatePitchPD(float desiredPitchAngle, bool enableI) {
         I = droneConfig.getPitchKi() * this->pitchErrorSum;
     } else {
         this->pitchErrorSum = 0;
+        I = 0;
     }
 
     float D = droneConfig.getPitchKd() * this->pitchRate;
