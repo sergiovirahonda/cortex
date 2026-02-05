@@ -27,18 +27,18 @@ void FlightController::updateTrims(DroneCommand& command, AttitudeTrim& attitude
     float stepDeg = droneConfig.getTrimStepPitchRollDeg();   // degrees (pitch, roll)
     float stepYaw = droneConfig.getTrimStepYawDegPerSec();  // deg/s (yaw)
 
-    // Pitch trim: -1 = FWD (Nose Down), 1 = BACK (Nose Up). Trim in degrees.
+    // Pitch trim: -1 = FWD (Nose Down), 1 = BACK (Nose Up). +pitchTrim -> desiredPitch more positive -> nose down.
     if (command.getPitchTrim() == -1) {
-        attitudeTrim.setPitchTrim(attitudeTrim.getPitchTrim() + stepDeg);
-    } else if (command.getPitchTrim() == 1) {
         attitudeTrim.setPitchTrim(attitudeTrim.getPitchTrim() - stepDeg);
+    } else if (command.getPitchTrim() == 1) {
+        attitudeTrim.setPitchTrim(attitudeTrim.getPitchTrim() + stepDeg);
     }
 
-    // Roll trim: -1 = LEFT, 1 = RIGHT. Trim in degrees.
+    // Roll trim: -1 = LEFT, 1 = RIGHT. +rollTrim -> desiredRoll more positive -> roll right; so trim left = subtract.
     if (command.getRollTrim() == -1) {
-        attitudeTrim.setRollTrim(attitudeTrim.getRollTrim() + stepDeg);
-    } else if (command.getRollTrim() == 1) {
         attitudeTrim.setRollTrim(attitudeTrim.getRollTrim() - stepDeg);
+    } else if (command.getRollTrim() == 1) {
+        attitudeTrim.setRollTrim(attitudeTrim.getRollTrim() + stepDeg);
     }
 
     // Yaw trim: 1 = CW, -1 = CCW. Trim in deg/s (rate).
@@ -158,6 +158,7 @@ void FlightController::computeMotorOutput(
 
     int16_t throttle = command.getThrottle();
 
+    // Yaw: +yawPD = CCW motors (M1,M4) faster; -yawPD = CW motors (M2,M3) faster = fight CCW twist.
     // M4 (Front Left) - CCW
     int motor4Speed = throttle + pitchPD - rollPD + yawPD;
     // M2 (Front Right) - CW

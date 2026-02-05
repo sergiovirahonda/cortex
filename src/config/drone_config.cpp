@@ -11,30 +11,28 @@ DroneConfig::DroneConfig() {
     accelOffsets.zOffset = -0.0600;   // MPU readings standard
     
     // =================================================================
-    // PID GAINS (Mark4 7" wide X, 1300 KV, 8" props, ~570 Hz loop)
+    // PID GAINS (12" M2M, 8" props, 1300 KV, ~570 Hz loop)
     // =================================================================
-    // PID uses dt (seconds); I-term is error*dt so Ki is per-second. Wide X:
-    // roll/pitch inertia similar; Kp ~10–20× Kd. Tune P first, then D, then I.
+    // Tuned for stable hand-test: lower Kp + higher Kd = less wobble. If sluggish, raise Kp.
     //
     // Roll PID
-    rollPID.kp = 6.50;
-    rollPID.ki = 1.50;
-    rollPID.kd = 1.20;
+    rollPID.kp = 4.0;
+    rollPID.ki = 1.2;
+    rollPID.kd = 1.9;
 
-    // Pitch PID (slightly stiffer P, less D if frame is symmetric)
-    pitchPID.kp = 6.50;
-    pitchPID.ki = 1.50;
-    pitchPID.kd = 1.20;
-    
-    // Yaw gain (P-only control)
-    kpYaw = 4.0;
-    
+    // Pitch PID (slightly softer P, more D to reduce pitch wobble)
+    pitchPID.kp = 3.8;
+    pitchPID.ki = 1.2;
+    pitchPID.kd = 2.0;
+
+    // Yaw gain (P-only; enough to fight twist, not so high it overshoots/wobbles)
+    kpYaw = 3.45;
+
     // =================================================================
-    // OUTPUT LIMITS
+    // OUTPUT LIMITS (12" M2M: softer cap = smoother correction, less overshoot)
     // =================================================================
-    // Safety limits to prevent overpowering throttle
-    maxPDOutput = 350.0;  // Limit correction to avoid overpowering throttle
-    maxIOutput = 75.0;    // Safety limit for integral term
+    maxPDOutput = 270.0;
+    maxIOutput = 60.0;
 
     // =================================================================
     // TRIM SETTINGS (degrees / deg/s; trim is setpoint offset, not PWM)
