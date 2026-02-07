@@ -28,6 +28,7 @@ class FlightController {
         void applyFailsafe(DroneCommand& command);
         void updateTrims(DroneCommand& command, AttitudeTrim& attitudeTrim, const DroneConfig& droneConfig);
         void computeAttitudeCorrections(
+            const DroneConfig& droneConfig,
             DroneCommand& command,
             Attitude& attitude,
             AttitudeTrim& trim,

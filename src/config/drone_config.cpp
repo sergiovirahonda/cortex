@@ -28,6 +28,17 @@ DroneConfig::DroneConfig() {
     // Yaw gain (P-only; enough to fight twist, not so high it overshoots/wobbles)
     kpYaw = 3.45;
 
+    // Launch gains (high KP, PD only; for spool-up / early climb)
+    rollLaunchKp = 12.0f;
+    rollLaunchKd = 3.0f;
+    pitchLaunchKp = 12.0f;
+    pitchLaunchKd = 3.0f;
+
+    // Throttle ranges: 1 = high KP (launch), 2 = transition, 3 = low KP (flight)
+    throttleIdle = 60;           // below: no corrections
+    throttleLaunchEnd = 1100;    // below: 100% launch gains
+    throttleFlightStart = 1300;  // above: 100% flight gains; between = blend
+
     // =================================================================
     // OUTPUT LIMITS (12" M2M: softer cap = smoother correction, less overshoot)
     // =================================================================
@@ -101,6 +112,31 @@ float DroneConfig::getPitchKd() const {
 // Yaw gain getters
 float DroneConfig::getYawKp() const {
     return kpYaw;
+}
+
+// Launch gain getters (PD only)
+float DroneConfig::getRollLaunchKp() const {
+    return rollLaunchKp;
+}
+float DroneConfig::getRollLaunchKd() const {
+    return rollLaunchKd;
+}
+float DroneConfig::getPitchLaunchKp() const {
+    return pitchLaunchKp;
+}
+float DroneConfig::getPitchLaunchKd() const {
+    return pitchLaunchKd;
+}
+
+// Throttle range getters
+int DroneConfig::getThrottleIdle() const {
+    return throttleIdle;
+}
+int DroneConfig::getThrottleLaunchEnd() const {
+    return throttleLaunchEnd;
+}
+int DroneConfig::getThrottleFlightStart() const {
+    return throttleFlightStart;
 }
 
 // Output limit getters

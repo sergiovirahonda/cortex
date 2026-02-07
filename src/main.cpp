@@ -217,7 +217,7 @@ void loop() {
 
   float pitchPD, rollPD, yawPD;
 
-  flightController.computeAttitudeCorrections(command, attitude, attitudeTrim, pitchPD, rollPD, yawPD);
+  flightController.computeAttitudeCorrections(droneConfig, command, attitude, attitudeTrim, pitchPD, rollPD, yawPD);
 
   // D. Mix Motors
   flightController.computeMotorOutput(motorOutput, command, attitudeTrim, rollPD, pitchPD, yawPD);

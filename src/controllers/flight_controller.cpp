@@ -11,6 +11,12 @@
 const int MIN_THROTTLE_PWM = 50;
 const int MAX_THROTTLE_PWM = 2047;
 
+// Float mapping (Arduino map() is integers only). Safe if in_max == in_min.
+static float mapFloat(float x, float inMin, float inMax, float outMin, float outMax) {
+    if (inMax <= inMin) return outMax;
+    return (x - inMin) * (outMax - outMin) / (inMax - inMin) + outMin;
+}
+
 FlightController::FlightController() {
     lastPacketTime = 0;
     inFailsafe = false;
@@ -102,14 +108,10 @@ void FlightController::applyFailsafe(DroneCommand& command) {
     }
 }
 
-// Throttle bands for two-stage PID (see attitude.cpp for I-term rationale).
-// I is disabled below FLYING_THROTTLE to avoid integrating ground-contact "error".
-static const int16_t IDLE_THROTTLE = 60;       // below: no corrections, PID reset
-static const int16_t FLYING_THROTTLE = 1100;   // above: full PID (I enabled)
-
-// Two-stage attitude correction: low = off, medium = PD only, high = full PID.
+// Three throttle ranges: 1 = high KP (launch), 2 = transition (blend), 3 = low KP (flight, I on).
 // Trim is in degrees/deg/s and added to setpoint so I-term does not fight trim.
 void FlightController::computeAttitudeCorrections(
+    const DroneConfig& droneConfig,
     DroneCommand& command,
     Attitude& attitude,
     AttitudeTrim& trim,
@@ -118,23 +120,40 @@ void FlightController::computeAttitudeCorrections(
     float& yawPD
 ) {
     int16_t throttle = command.getThrottle();
+    int16_t idle = droneConfig.getThrottleIdle();
+    int16_t launchEnd = droneConfig.getThrottleLaunchEnd();
+    int16_t flightStart = droneConfig.getThrottleFlightStart();
 
     float desiredPitch = (float)command.getPitch() + trim.getPitchTrim();  // degrees
     float desiredRoll  = (float)command.getRoll()  + trim.getRollTrim();   // degrees
     float desiredYaw   = (float)command.getYaw()  + trim.getYawTrim();     // deg/s
 
-    if (throttle < IDLE_THROTTLE) {
+    if (throttle < idle) {
         attitude.resetPID();
         pitchPD = 0;
         rollPD  = 0;
         yawPD   = 0;
-    } else if (throttle < FLYING_THROTTLE) {
-        pitchPD = attitude.calculatePitchPD(desiredPitch, false);
-        rollPD  = attitude.calculateRollPD(desiredRoll, false);
-        yawPD   = attitude.calculateYawP(desiredYaw);
     } else {
-        pitchPD = attitude.calculatePitchPD(desiredPitch, true);
-        rollPD  = attitude.calculateRollPD(desiredRoll, true);
+        // Three stages: launch (high KP), transition (blend), flight (low KP, I on).
+        float gainBlend;  // 0 = launch, 1 = flight; feed into attitude for Kp/Kd blend
+        bool enableI;
+
+        if (throttle < launchEnd) {
+            // Stage 1: Below lift-off → MAX strength (launch gains, no I)
+            gainBlend = 0.0f;
+            enableI = false;
+        } else if (throttle > flightStart) {
+            // Stage 2: Flying → NORMAL strength (flight gains, I on)
+            gainBlend = 1.0f;
+            enableI = true;
+        } else {
+            // Stage 3: Transition zone → smoothly slide from launch to flight
+            gainBlend = mapFloat((float)throttle, (float)launchEnd, (float)flightStart, 0.0f, 1.0f);
+            enableI = false;
+        }
+
+        rollPD  = attitude.calculateRollPD(desiredRoll, enableI, gainBlend);
+        pitchPD = attitude.calculatePitchPD(desiredPitch, enableI, gainBlend);
         yawPD   = attitude.calculateYawP(desiredYaw);
     }
 }

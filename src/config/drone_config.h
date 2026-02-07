@@ -20,10 +20,21 @@ class DroneConfig {
         // Accelerometer offsets
         AccelerometerOffsetConfig accelOffsets;
         
-        // PID Gains
+        // PID Gains (flight: low KP, full PID)
         PIDGains rollPID;
         PIDGains pitchPID;
         float kpYaw;
+
+        // Launch gains (high KP, PD only; plain floats, no struct)
+        float rollLaunchKp;
+        float rollLaunchKd;
+        float pitchLaunchKp;
+        float pitchLaunchKd;
+
+        // Throttle ranges: idle, launch end, flight start (3 ranges: high KP, transition, low KP)
+        int throttleIdle;
+        int throttleLaunchEnd;
+        int throttleFlightStart;
         
         // Output limits
         float maxPDOutput;
@@ -60,6 +71,17 @@ class DroneConfig {
         
         // Yaw gain getters
         float getYawKp() const;
+
+        // Launch gain getters (PD only)
+        float getRollLaunchKp() const;
+        float getRollLaunchKd() const;
+        float getPitchLaunchKp() const;
+        float getPitchLaunchKd() const;
+
+        // Throttle range getters
+        int getThrottleIdle() const;
+        int getThrottleLaunchEnd() const;
+        int getThrottleFlightStart() const;
         
         // Output limit getters
         float getMaxPDOutput() const;
