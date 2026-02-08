@@ -73,10 +73,10 @@ float Attitude::getYawRate() { return this->yawRate; }
 // =================================================================
 // STABILIZATION LOGIC (PID with dt for loop-rate independence)
 // =================================================================
-// dt in seconds; I-term uses error*dt so Ki is "per second". enableI: false
-// before takeoff (avoids integrating ground-contact error), true when flying.
+// gainBlend 0 = launch (high KP, PD only), 1 = flight (low KP, I when enableI).
+// Linear blend of Kp/Kd in transition. I only when enableI (flight range).
 
-float Attitude::calculateRollPD(float desiredRollAngle, bool enableI) {
+float Attitude::calculateRollPD(float desiredRollAngle, bool enableI, float gainBlend) {
     unsigned long now = micros();
     float dt = (lastTime > 0) ? (now - lastTime) / 1e6f : (1.0f / 570.0f);
     if (dt <= 0.0f || dt > 0.02f) dt = 1.0f / 570.0f;  // clamp first run / glitches
@@ -84,7 +84,9 @@ float Attitude::calculateRollPD(float desiredRollAngle, bool enableI) {
     lastDt = dt;
 
     float error = desiredRollAngle - this->rollAngle;
-    float P = droneConfig.getRollKp() * error;
+    float kP = (1.0f - gainBlend) * droneConfig.getRollLaunchKp() + gainBlend * droneConfig.getRollKp();
+    float kD = (1.0f - gainBlend) * droneConfig.getRollLaunchKd() + gainBlend * droneConfig.getRollKd();
+    float P = kP * error;
     float kI = droneConfig.getRollKi();
 
     float I = 0;
@@ -92,42 +94,44 @@ float Attitude::calculateRollPD(float desiredRollAngle, bool enableI) {
         this->rollErrorSum += error * dt;
         this->rollErrorSum = constrain(
             this->rollErrorSum,
-            -droneConfig.getMaxIOutput() / droneConfig.getRollKi(),
-            droneConfig.getMaxIOutput() / droneConfig.getRollKi()
+            -droneConfig.getMaxIOutput() / kI,
+            droneConfig.getMaxIOutput() / kI
         );
-        I = droneConfig.getRollKi() * this->rollErrorSum;
+        I = kI * this->rollErrorSum;
     } else {
         this->rollErrorSum = 0;
         I = 0;
     }
 
-    float D = droneConfig.getRollKd() * this->rollRate;
+    float D = kD * this->rollRate;
     float output = P + I - D;
     return constrain(output, -droneConfig.getMaxPDOutput(), droneConfig.getMaxPDOutput());
 }
 
-float Attitude::calculatePitchPD(float desiredPitchAngle, bool enableI) {
+float Attitude::calculatePitchPD(float desiredPitchAngle, bool enableI, float gainBlend) {
     float dt = lastDt;
 
     float error = desiredPitchAngle - this->pitchAngle;
-    float P = droneConfig.getPitchKp() * error;
-    float kI = droneConfig.getRollKi();
+    float kP = (1.0f - gainBlend) * droneConfig.getPitchLaunchKp() + gainBlend * droneConfig.getPitchKp();
+    float kD = (1.0f - gainBlend) * droneConfig.getPitchLaunchKd() + gainBlend * droneConfig.getPitchKd();
+    float P = kP * error;
+    float kI = droneConfig.getPitchKi();
 
     float I = 0;
     if (enableI && kI > 0.0f) {
         this->pitchErrorSum += error * dt;
         this->pitchErrorSum = constrain(
             this->pitchErrorSum,
-            -droneConfig.getMaxIOutput() / droneConfig.getPitchKi(),
-            droneConfig.getMaxIOutput() / droneConfig.getPitchKi()
+            -droneConfig.getMaxIOutput() / kI,
+            droneConfig.getMaxIOutput() / kI
         );
-        I = droneConfig.getPitchKi() * this->pitchErrorSum;
+        I = kI * this->pitchErrorSum;
     } else {
         this->pitchErrorSum = 0;
         I = 0;
     }
 
-    float D = droneConfig.getPitchKd() * this->pitchRate;
+    float D = kD * this->pitchRate;
     float output = P + I - D;
     return constrain(output, -droneConfig.getMaxPDOutput(), droneConfig.getMaxPDOutput());
 }

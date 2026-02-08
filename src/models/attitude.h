@@ -44,9 +44,9 @@ public:
         float getPitchAngle();
         float getPitchRate();
         float getYawRate();
-        // Calculate PID Outputs
-        float calculateRollPD(float desiredRollAngle, bool enableI);
-        float calculatePitchPD(float desiredPitchAngle, bool enableI);
+        // Calculate PID Outputs (gainBlend: 0 = launch high KP, 1 = flight low KP; I only when enableI)
+        float calculateRollPD(float desiredRollAngle, bool enableI, float gainBlend = 1.0f);
+        float calculatePitchPD(float desiredPitchAngle, bool enableI, float gainBlend = 1.0f);
         float calculateYawP(float desiredYawRate);
         // Add a reset method (Critical for safety!)
         void resetPID() {
