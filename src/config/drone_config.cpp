@@ -6,7 +6,7 @@ DroneConfig::DroneConfig() {
     // =================================================================
     // These offsets ensure "Level" is always "Level", even if you boot on a hill
     // Leveled offset values
-    accelOffsets.xOffset = 0.0215;    //  Towards negative -> Tilt to the right
+    accelOffsets.xOffset = 0.0350;    //  Towards negative -> Tilt to the right
     accelOffsets.yOffset = -0.0035;   // Towards negative -> Tilt forward
     accelOffsets.zOffset = -0.0600;   // MPU readings standard
     
@@ -36,8 +36,8 @@ DroneConfig::DroneConfig() {
 
     // Throttle ranges: 1 = high KP (launch), 2 = transition, 3 = low KP (flight)
     throttleIdle = 60;           // below: no corrections
-    throttleLaunchEnd = 1100;    // below: 100% launch gains
-    throttleFlightStart = 1300;  // above: 100% flight gains; between = blend
+    throttleLaunchEnd = 1150;    // below: 100% launch gains
+    throttleFlightStart = 1400;  // above: 100% flight gains; between = blend
 
     // =================================================================
     // OUTPUT LIMITS (12" M2M: softer cap = smoother correction, less overshoot)

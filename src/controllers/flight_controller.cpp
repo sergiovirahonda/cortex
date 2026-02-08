@@ -149,7 +149,7 @@ void FlightController::computeAttitudeCorrections(
         } else {
             // Stage 3: Transition zone → smoothly slide from launch to flight
             gainBlend = mapFloat((float)throttle, (float)launchEnd, (float)flightStart, 0.0f, 1.0f);
-            enableI = false;
+            enableI = true;
         }
 
         rollPD  = attitude.calculateRollPD(desiredRoll, enableI, gainBlend);
