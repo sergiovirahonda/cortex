@@ -37,7 +37,7 @@ DroneConfig::DroneConfig() {
     // Throttle ranges: 1 = high KP (launch), 2 = transition, 3 = low KP (flight)
     throttleIdle = 60;           // below: no corrections
     throttleLaunchEnd = 1150;    // below: 100% launch gains
-    throttleFlightStart = 1400;  // above: 100% flight gains; between = blend
+    throttleFlightStart = 1450;  // above: 100% flight gains; between = blend
 
     // =================================================================
     // OUTPUT LIMITS (12" M2M: softer cap = smoother correction, less overshoot)
