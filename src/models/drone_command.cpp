@@ -96,3 +96,41 @@ void DroneCommand::remap() {
     this->roll = (int16_t)desiredRollAngle;
     this->yaw = (int16_t)desiredYawRate;
 }
+
+// =================================================================
+// TelemetryData
+// =================================================================
+
+TelemetryData::TelemetryData(int16_t pwm, int16_t roll, int16_t pitch) {
+    this->pwm = pwm;
+    this->roll = roll;
+    this->pitch = pitch;
+}
+
+int16_t TelemetryData::getPwm()   { return this->pwm; }
+int16_t TelemetryData::getRoll()  { return this->roll; }
+int16_t TelemetryData::getPitch() { return this->pitch; }
+
+void TelemetryData::setPwm(int16_t pwm)     { this->pwm = pwm; }
+void TelemetryData::setRoll(int16_t roll)   { this->roll = roll; }
+void TelemetryData::setPitch(int16_t pitch) { this->pitch = pitch; }
+
+void TelemetryData::reset() {
+    pwm = 0;
+    roll = 0;
+    pitch = 0;
+}
+
+TelemetryPacket TelemetryData::createPacket() {
+    TelemetryPacket pkt;
+    pkt.pwm = this->pwm;
+    pkt.roll = this->roll;
+    pkt.pitch = this->pitch;
+    return pkt;
+}
+
+void TelemetryData::loadFromPacket(TelemetryPacket pkt) {
+    this->pwm = pkt.pwm;
+    this->roll = pkt.roll;
+    this->pitch = pkt.pitch;
+}

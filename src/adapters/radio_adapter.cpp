@@ -23,7 +23,8 @@ void RadioAdapter::begin() {
     // Explicitly disable variable sizing (Safety first)
     this->radio.disableDynamicPayloads();
     // Match TX configuration
-    this->radio.setAutoAck(false);
+    this->radio.setAutoAck(true);
+    this->radio.enableAckPayload();
     this->radio.setPALevel(RF24_PA_LOW);  // Match TX side
     this->radio.setDataRate(RF24_250KBPS); // Longest Range
     this->radio.setChannel(108); // Avoid WiFi interference (Above 2.48GHz) 
@@ -38,6 +39,10 @@ bool RadioAdapter::receivePacket(DronePacket &packet) {
     } else {
         return false;
     }
+}
+
+void RadioAdapter::sendTelemetry(TelemetryData &data) {
+    this->radio.writeAckPayload(1, &data, sizeof(TelemetryData));
 }
 
 bool RadioAdapter::isChipConnected() {

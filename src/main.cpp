@@ -61,6 +61,7 @@ byte NRF_RX_ADDRESS[6] = "00001";
 DroneConfig droneConfig;
 DronePacket packet;
 DroneCommand command(0, 0, 0, 0, 0, 0, 0, 0);
+TelemetryData telemetry(0, 0, 0);
 MotorOutput motorOutput;
 Attitude attitude(droneConfig);
 AttitudeTrim attitudeTrim;
@@ -111,7 +112,6 @@ void setup() {
   // Initialize radio & MPU drivers
   radioAdapter.begin();
   if (!radioAdapter.isChipConnected()){
-    Serial.println("Radio Hardware Fail!");
     display.println("Radio: FAIL");
     display.println("Check Wiring!");
     display.display();
@@ -203,6 +203,10 @@ void loop() {
   if (packetReceived) {
     command.loadFromPacket(packet);
     command.remap();
+    telemetry.setPwm(command.getThrottle());
+    telemetry.setRoll(attitude.getRollAngle());
+    telemetry.setPitch(attitude.getPitchAngle());
+    radioAdapter.sendTelemetry(telemetry);
   }
   
   // Update failsafe state and apply failsafe if needed
