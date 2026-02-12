@@ -149,7 +149,10 @@ void FlightController::computeAttitudeCorrections(
         } else {
             // Stage 3: Transition zone → smoothly slide from launch to flight
             gainBlend = mapFloat((float)throttle, (float)launchEnd, (float)flightStart, 0.0f, 1.0f);
-            enableI = true;
+            // Enable I only in upper part of transition (reduces wobble, avoids windup early in band)
+            const float I_IN_TRANSITION_THRESHOLD = 0.5f;  // 0 = never in transition, 1 = full flight; tune if needed
+            // enableI = (gainBlend >= I_IN_TRANSITION_THRESHOLD);
+            enableI = false;
         }
 
         rollPD  = attitude.calculateRollPD(desiredRoll, enableI, gainBlend);
