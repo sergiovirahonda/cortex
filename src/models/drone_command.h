@@ -72,4 +72,34 @@ class DroneCommand {
         void loadFromPacket(DronePacket packet);
 };
 
+// --- TELEMETRY WIRE FORMAT ---
+struct TelemetryPacket {
+    int16_t pwm;   // Motor PWM
+    int16_t roll;  // Roll (e.g. x100 for degrees)
+    int16_t pitch; // Pitch (e.g. x100 for degrees)
+} __attribute__((packed));
+
+class TelemetryData {
+private:
+    int16_t pwm;
+    int16_t roll;
+    int16_t pitch;
+
+public:
+    TelemetryData(int16_t pwm, int16_t roll, int16_t pitch);
+
+    int16_t getPwm();
+    int16_t getRoll();
+    int16_t getPitch();
+
+    void setPwm(int16_t pwm);
+    void setRoll(int16_t roll);
+    void setPitch(int16_t pitch);
+
+    void reset();
+
+    TelemetryPacket createPacket();
+    void loadFromPacket(TelemetryPacket packet);
+};
+
 #endif
