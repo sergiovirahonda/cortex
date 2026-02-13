@@ -11,41 +11,41 @@ DroneConfig::DroneConfig() {
     accelOffsets.zOffset = -0.0600;   // MPU readings standard
     
     // =================================================================
-    // PID GAINS (12" M2M, 8" props, 1300 KV, ~570 Hz loop)
+    // PID GAINS (12" M2M, 7" props, 1300 KV, ~570 Hz loop)
     // =================================================================
     // Tuned for stable hand-test: lower Kp + higher Kd = less wobble. If sluggish, raise Kp.
     //
     // Roll PID
-    rollPID.kp = 3.8;
-    rollPID.ki = 1.3;
-    rollPID.kd = 2.2;
+    rollPID.kp = 6.0;
+    rollPID.ki = 1.5;
+    rollPID.kd = 2.0;
 
-    // Pitch PID (stage 3: muscle to level when tail-heavy, D for contention so correction doesn't overshoot)
-    pitchPID.kp = 4.5;   // strong enough to pull level
-    pitchPID.ki = 1.2;   // enough I to hold level
-    pitchPID.kd = 3.0;   // high D = contention, damps the correction so it doesn't wobble
+    // Pitch PID (stage 3: Kp > Kd is usual; enough D to damp without overdoing it)
+    pitchPID.kp = 7.0;   // main correction
+    pitchPID.ki = 1.5;   // hold level
+    pitchPID.kd = 2.5;   // damping, but below Kp (high Kd can cause jitter)
 
     // Yaw gain (P-only; enough to fight twist, not so high it overshoots/wobbles)
     kpYaw = 3.45;
 
     // Launch gains (high KP, PD only; for spool-up / early climb)
     // Pitch slightly stronger to prevent tail dropping back during stage 1
-    rollLaunchKp = 12.0f;
-    rollLaunchKd = 3.0f;
-    pitchLaunchKp = 16.0f;   // stronger pitch hold during launch
+    rollLaunchKp = 16.0f;
+    rollLaunchKd = 3.5f;
+    pitchLaunchKp = 18.0f;   // stronger pitch hold during launch
     pitchLaunchKd = 4.5f;
 
     // Throttle ranges: 1 = high KP (launch), 2 = transition, 3 = low KP (flight)
-    // Narrower band = less time in transition = less wobble
+    // Shorter transition = less time in blend = less stage-2 wobble/vibration
     throttleIdle = 60;           // below: no corrections
-    throttleLaunchEnd = 1100;   // below: 100% launch gains
-    throttleFlightStart = 1250; // above: 100% flight; blend 1100–1250 (narrower for less stage-2 wobble)
+    throttleLaunchEnd = 1350;   // below: 100% launch gains
+    throttleFlightStart = 1500; // above: 100% flight; blend 1100–1200 (short transition)
 
     // =================================================================
-    // OUTPUT LIMITS (12" M2M: softer cap = smoother correction, less overshoot)
+    // OUTPUT LIMITS (12" M2M: room for correction; D provides contention so not too aggressive)
     // =================================================================
-    maxPDOutput = 270.0;
-    maxIOutput = 55.0;   // enough for I to hold level; not so high it causes a hard overshoot
+    maxPDOutput = 300.0;  // higher cap so pitch can pull level when tilted back
+    maxIOutput = 60.0;    // enough for I to hold level
 
     // =================================================================
     // TRIM SETTINGS (degrees / deg/s; trim is setpoint offset, not PWM)
