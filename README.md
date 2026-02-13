@@ -12,7 +12,8 @@ Cortex is the flight control system (FC) for your DIY drone project. It receives
 * ⚡ **Native DShot ESC Control**: Direct hardware-level DShot600 protocol via ESP32 RMT
 * 📡 **Wireless Communication**: nRF24L01 radio module for low-latency command reception
 * 🎯 **MPU6050 Integration**: Hardware DLPF filtering and software calibration for accurate attitude sensing
-* 📺 **OLED Telemetry Display**: Real-time flight data visualization (attitude, throttle, motor outputs)
+* 📺 **OLED Telemetry Display**: Real-time flight data on the drone (attitude, throttle, motor outputs, trims)
+* 📤 **Radio Telemetry Downlink**: Sends throttle, roll, and pitch back to the transmitter via nRF24 ACK payload (for Synapse display)
 * 🔒 **Safety Features**: Arming sequence, throttle limits, and hardware initialization checks
 * 🏗️ **Clean Architecture**: Modular design with adapters, models, and controllers
 * ⚙️ **PlatformIO Integration**: Modern build system with dependency management
@@ -79,38 +80,46 @@ The drone uses a standard X-frame quadcopter configuration:
 cortex/
 ├── src/
 │   ├── main.cpp                    # Main control loop & initialization
+│   ├── config/
+│   │   └── drone_config.*          # PID gains, throttle bands, limits, trim steps
 │   ├── controllers/
-│   │   └── flight_controller.*     # Motor mixing matrix
+│   │   └── flight_controller.*     # Throttle stages, mixing matrix, trims, failsafe
 │   ├── adapters/
-│   │   ├── radio_adapter.*         # nRF24L01 communication
+│   │   ├── radio_adapter.*         # nRF24L01: receive commands, send telemetry (ACK payload)
 │   │   ├── mpu_adapter.*           # MPU6050 sensor interface
-│   │   └── motor_adapter.*         # DShot ESC control (native)
+│   │   ├── motor_adapter.*         # DShot ESC control (native)
+│   │   └── bmp280_adapter.*        # BME280 barometer (optional, feature-flagged)
 │   └── models/
-│       ├── attitude.*              # Attitude state & PID controllers
-│       ├── drone_command.*         # Command data structure
-│       └── motor_output.*          # Motor speed outputs
+│       ├── attitude.*              # Attitude state & PID (roll/pitch/yaw)
+│       ├── drone_command.*         # DronePacket (commands), TelemetryPacket (downlink)
+│       ├── motor_output.*          # Motor speed outputs
+│       └── ...
 └── platformio.ini                  # Build configuration
 ```
 
 ### Key Components
 
-* **FlightController**: Implements the motor mixing matrix for quadcopter control
-* **Attitude**: Manages sensor data and calculates PD/P control outputs
-* **RadioAdapter**: Handles nRF24L01 initialization and packet reception
-* **MPUAdapter**: Interfaces with MPU6050, handles calibration and filtering
-* **NativeDShot**: ESP32 RMT-based DShot600 implementation for direct ESC control
+* **FlightController**: Throttle-band logic (launch / transition / flight), motor mixing matrix, trim updates, failsafe
+* **Attitude**: Sensor state and PID: roll/pitch (PD + I in flight), yaw (P only); launch vs flight gains via blend
+* **DroneConfig**: All tunable constants (PID gains, throttle bands, limits, trim steps) in one place
+* **RadioAdapter**: nRF24L01 init, receive `DronePacket` (commands), send `TelemetryData` as ACK payload
+* **MPUAdapter**: MPU6050 interface, calibration, filtering
+* **NativeDShot**: ESP32 RMT-based DShot600 for ESC control
 
 ### Control Loop
 
-The flight controller operates at approximately **1kHz** (1ms loop time):
+The flight controller runs at **~1 kHz** (fast loop):
 
-1. **Receive Radio**: Check for new command packets from transmitter
-2. **Read Sensors**: Update MPU6050 attitude data (roll, pitch, yaw rates)
-3. **Calculate PID**: Compute stabilization corrections for roll, pitch, and yaw
-4. **Mix Motors**: Apply motor mixing matrix to combine throttle and corrections
-5. **Write Motors**: Send DShot commands to all 4 ESCs
+1. **Receive Radio**: Check for new command packet from transmitter
+2. **Update command & send telemetry**: If packet received, load command, remap, then send telemetry (throttle, roll, pitch) back via ACK payload
+3. **Failsafe**: Update failsafe state; override command if link lost
+4. **Read Sensors**: Update MPU6050 attitude (roll, pitch, yaw rates)
+5. **Calculate PID**: Three throttle stages (launch = high Kp, transition = blend, flight = full PID); trim added to setpoint
+6. **Mix Motors**: Apply mixing matrix (throttle + corrections)
+7. **Write Motors**: DShot to all 4 ESCs
+8. **Update Trims**: Process trim buttons from command (debounced)
 
-A slower **3Hz** loop updates the OLED display with telemetry data.
+A **1 Hz** slow loop updates the OLED with loop rate, attitude, throttle, motor outputs, and trims.
 
 ## Installation
 
@@ -164,47 +173,53 @@ The radio adapter is configured to match the Synapse transmitter:
 * **Data Rate**: 250KBPS (longest range)
 * **Power Level**: PA_LOW (adjustable for range vs. power consumption)
 * **Channel**: 108 (above 2.48GHz to avoid WiFi interference)
-* **Auto-ACK**: Disabled (for lower latency)
+* **Auto-ACK**: Enabled with ACK payload (used for telemetry downlink)
+
+### Telemetry (Downlink to Transmitter)
+
+Cortex sends a small telemetry payload back to the transmitter on every received command packet, using the nRF24 **ACK payload** (no extra round-trip).
+
+**Wire format** (`TelemetryPacket` in `src/models/drone_command.h`):
+
+| Field  | Type    | Description                    |
+|--------|---------|--------------------------------|
+| `pwm`  | int16_t | Current throttle (command)     |
+| `roll` | int16_t | Current roll angle (degrees)   |
+| `pitch`| int16_t | Current pitch angle (degrees)  |
+
+**Flow:**
+1. Transmitter (Synapse) sends a `DronePacket` (commands).
+2. Cortex receives it, updates command, then calls `radioAdapter.sendTelemetry(telemetry)`.
+3. `sendTelemetry` uses `radio.writeAckPayload(1, &data, sizeof(TelemetryData))`, so the next ACK for pipe 1 carries the telemetry.
+4. Synapse can read the ACK payload and display throttle, roll, and pitch on the TX screen.
+
+**Implementation:** Telemetry is filled in the fast loop when a packet is received (`main.cpp`): `telemetry.setPwm(command.getThrottle())`, `setRoll(attitude.getRollAngle())`, `setPitch(attitude.getPitchAngle())`, then `radioAdapter.sendTelemetry(telemetry)`.
 
 ### PID Tuning
 
-PID gains are defined in `src/models/attitude.cpp`:
+All gains and limits are in **`src/config/drone_config.cpp`** (and declared in `drone_config.h`).
 
-```cpp
-// Roll & Pitch (PD Controller)
-const float KP_ROLL  = 2.0;   // Proportional gain
-const float KD_ROLL  = 0.20;  // Derivative gain
+* **Flight stage (stage 3)**: Full PID for roll/pitch (Kp, Ki, Kd), P-only for yaw. Used when throttle is above the flight threshold.
+* **Launch stage (stage 1)**: Higher Kp/Kd for roll/pitch (PD only, no I) for spool-up; separate `rollLaunchKp`, `pitchLaunchKp`, etc.
+* **Transition (stage 2)**: Linear blend of launch and flight gains between two throttle values; I-term can be enabled in the upper part of the band.
 
-const float KP_PITCH = 2.2;
-const float KD_PITCH = 0.12;
+Throttle band constants: `throttleIdle`, `throttleLaunchEnd`, `throttleFlightStart`. Adjust these and the PID/launch gains to match your frame and props.
 
-// Yaw (P Controller)
-const float KP_YAW   = 4.0;
-```
-
-**Tuning Guidelines:**
-* **Kp (Proportional)**: Controls stiffness. Too low = sluggish, too high = oscillations
-* **Kd (Derivative)**: Dampens motion. Prevents overshoot and bounce
-* **Rule of Thumb**: Kp should be 10-20x larger than Kd for roll/pitch
-* Start with low values and increase gradually while testing
+**Tuning guidelines:**
+* **Kp**: Stiffness. Too low = sluggish, too high = oscillations.
+* **Kd**: Damping. Reduces overshoot; keep Kd &lt; Kp to avoid noise amplification.
+* **Ki**: Removes steady-state error; cap with `maxIOutput` to avoid windup.
+* Tune stage 1 (launch) for stable level at low throttle; stage 3 (flight) for smooth hover and minimal wobble.
 
 ### MPU6050 Calibration
 
-The MPU6050 uses hardware DLPF (Digital Low-Pass Filter) set to 44Hz bandwidth to reduce vibration noise. Software filtering is configured in `src/adapters/mpu_driver.cpp`:
+The MPU6050 uses hardware DLPF (Digital Low-Pass Filter) set to 44 Hz bandwidth to reduce vibration noise. Software filtering and accel offsets are configured in `src/adapters/mpu_adapter.cpp`. Accel offsets can also be set in `src/config/drone_config.cpp` (e.g. `accelOffsets.xOffset`, `yOffset`, `zOffset`).
 
-```cpp
-// Increase to 0.99 if angles jump when motors spin
-this->mpu->setFilterGyroCoef(0.99);
-
-// Accel offsets (calibrate for your specific MPU)
-this->mpu->setAccOffsets(-0.17, -0.16, -0.06);
-```
-
-**Calibration Process:**
+**Calibration process:**
 1. Place drone on level surface
-2. Power on and wait for calibration to complete
-3. If angles drift, adjust accel offsets in code
-4. If angles jump during flight, increase gyro filter coefficient
+2. Power on and wait for gyro calibration to complete
+3. If angles drift, adjust accel offsets in config or MPU adapter
+4. If angles jump when motors spin, increase gyro filter coefficient (e.g. 0.99)
 
 ### Motor Mixing
 
@@ -214,7 +229,7 @@ The motor mixing matrix in `src/controllers/flight_controller.cpp` combines thro
 * **Roll**: Left side down → Left motors (M3, M4) increase
 * **Yaw**: Turn right (CW) → Clockwise motors (M2, M3) increase
 
-Adjust trim values in the mixing function if your drone drifts in a specific direction.
+Trim is applied as a **setpoint offset** (not in the mix): desired angle = command + trim. Use the transmitter trim buttons to adjust; step size and debounce are in `drone_config.cpp` (`trimStepPitchRollDeg`, `trimStepYawDegPerSec`, `trimDelay`).
 
 ### Safety Limits
 
@@ -267,14 +282,15 @@ The flight controller performs an automatic arming sequence on startup:
 
 ### OLED Display
 
-The display shows real-time flight data updated at 3Hz:
+The display shows real-time flight data updated at **1 Hz** (once per second):
 
 ```
--- SYSTEM RUNNING --
-Pitch: 2.5 | Roll: -1.2
-Yaw: 0.8 | Throttle: 45
+- @ 1000 Hz -
+P: 2.5 | R: -1.2
+Y: 0.8 | T: 1050
 M1: 250 | M2: 280
 M3: 240 | M4: 270
+Trims: P: 0.2 | R: -0.4 | Y: 0
 ```
 
 ## Troubleshooting
@@ -341,9 +357,9 @@ pio device monitor
 
 ### Adding Features
 
-* **Altitude Hold**: Add barometer sensor and altitude PID loop
+* **Altitude Hold**: BME280 adapter exists (feature-flagged); add altitude PID loop
 * **GPS Navigation**: Integrate GPS module for position hold
-* **Telemetry Downlink**: Send flight data back to transmitter
+* **Telemetry Downlink**: Implemented (throttle, roll, pitch via ACK payload); extend `TelemetryPacket` for more fields if Synapse supports it
 * **LED Indicators**: Add status LEDs for visual feedback
 
 ## Related Projects
