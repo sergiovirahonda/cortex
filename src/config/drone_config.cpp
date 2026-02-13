@@ -16,34 +16,36 @@ DroneConfig::DroneConfig() {
     // Tuned for stable hand-test: lower Kp + higher Kd = less wobble. If sluggish, raise Kp.
     //
     // Roll PID
-    rollPID.kp = 4.0;
-    rollPID.ki = 1.2;
-    rollPID.kd = 1.9;
+    rollPID.kp = 3.8;
+    rollPID.ki = 1.3;
+    rollPID.kd = 2.2;
 
-    // Pitch PID (slightly softer P, more D to reduce pitch wobble)
-    pitchPID.kp = 3.8;
-    pitchPID.ki = 1.2;
-    pitchPID.kd = 2.0;
+    // Pitch PID (stage 3: muscle to level when tail-heavy, D for contention so correction doesn't overshoot)
+    pitchPID.kp = 4.5;   // strong enough to pull level
+    pitchPID.ki = 1.2;   // enough I to hold level
+    pitchPID.kd = 3.0;   // high D = contention, damps the correction so it doesn't wobble
 
     // Yaw gain (P-only; enough to fight twist, not so high it overshoots/wobbles)
     kpYaw = 3.45;
 
     // Launch gains (high KP, PD only; for spool-up / early climb)
+    // Pitch slightly stronger to prevent tail dropping back during stage 1
     rollLaunchKp = 12.0f;
     rollLaunchKd = 3.0f;
-    pitchLaunchKp = 12.0f;
-    pitchLaunchKd = 3.0f;
+    pitchLaunchKp = 16.0f;   // stronger pitch hold during launch
+    pitchLaunchKd = 4.5f;
 
     // Throttle ranges: 1 = high KP (launch), 2 = transition, 3 = low KP (flight)
+    // Narrower band = less time in transition = less wobble
     throttleIdle = 60;           // below: no corrections
-    throttleLaunchEnd = 1150;    // below: 100% launch gains
-    throttleFlightStart = 1450;  // above: 100% flight gains; between = blend
+    throttleLaunchEnd = 1100;   // below: 100% launch gains
+    throttleFlightStart = 1250; // above: 100% flight; blend 1100–1250 (narrower for less stage-2 wobble)
 
     // =================================================================
     // OUTPUT LIMITS (12" M2M: softer cap = smoother correction, less overshoot)
     // =================================================================
     maxPDOutput = 270.0;
-    maxIOutput = 60.0;
+    maxIOutput = 55.0;   // enough for I to hold level; not so high it causes a hard overshoot
 
     // =================================================================
     // TRIM SETTINGS (degrees / deg/s; trim is setpoint offset, not PWM)

@@ -33,28 +33,32 @@ void FlightController::updateTrims(DroneCommand& command, AttitudeTrim& attitude
     float stepDeg = droneConfig.getTrimStepPitchRollDeg();   // degrees (pitch, roll)
     float stepYaw = droneConfig.getTrimStepYawDegPerSec();  // deg/s (yaw)
 
-    // Pitch trim: -1 = FWD (Nose Down), 1 = BACK (Nose Up). +pitchTrim -> desiredPitch more positive -> nose down.
-    if (command.getPitchTrim() == -1) {
+    // Use sign of TX value so trim works with -1/1 or -100/100 etc. Negative = one direction, positive = other.
+    // Pitch: negative = nose down (subtract from trim), positive = nose up (add to trim).
+    int16_t pt = command.getPitchTrim();
+    if (pt < 0) {
         attitudeTrim.setPitchTrim(attitudeTrim.getPitchTrim() - stepDeg);
-    } else if (command.getPitchTrim() == 1) {
+    } else if (pt > 0) {
         attitudeTrim.setPitchTrim(attitudeTrim.getPitchTrim() + stepDeg);
     }
 
-    // Roll trim: -1 = LEFT, 1 = RIGHT. +rollTrim -> desiredRoll more positive -> roll right; so trim left = subtract.
-    if (command.getRollTrim() == -1) {
+    // Roll: negative = left (subtract), positive = right (add).
+    int16_t rt = command.getRollTrim();
+    if (rt < 0) {
         attitudeTrim.setRollTrim(attitudeTrim.getRollTrim() - stepDeg);
-    } else if (command.getRollTrim() == 1) {
+    } else if (rt > 0) {
         attitudeTrim.setRollTrim(attitudeTrim.getRollTrim() + stepDeg);
     }
 
-    // Yaw trim: 1 = CW, -1 = CCW. Trim in deg/s (rate).
-    if (command.getYawTrim() == 1) {
+    // Yaw: positive = CW (add), negative = CCW (subtract).
+    int16_t yt = command.getYawTrim();
+    if (yt > 0) {
         attitudeTrim.setYawTrim(attitudeTrim.getYawTrim() + stepYaw);
-    } else if (command.getYawTrim() == -1) {
+    } else if (yt < 0) {
         attitudeTrim.setYawTrim(attitudeTrim.getYawTrim() - stepYaw);
     }
 
-    if (command.getTrimReset() == 1) {
+    if (command.getTrimReset() != 0) {
         attitudeTrim.reset();
     }
 }
@@ -149,10 +153,9 @@ void FlightController::computeAttitudeCorrections(
         } else {
             // Stage 3: Transition zone → smoothly slide from launch to flight
             gainBlend = mapFloat((float)throttle, (float)launchEnd, (float)flightStart, 0.0f, 1.0f);
-            // Enable I only in upper part of transition (reduces wobble, avoids windup early in band)
-            const float I_IN_TRANSITION_THRESHOLD = 0.5f;  // 0 = never in transition, 1 = full flight; tune if needed
-            // enableI = (gainBlend >= I_IN_TRANSITION_THRESHOLD);
-            enableI = false;
+            // Enable I only in upper part of transition (0.8 = late, less wobble)
+            const float I_IN_TRANSITION_THRESHOLD = 0.8f;
+            enableI = (gainBlend >= I_IN_TRANSITION_THRESHOLD);
         }
 
         rollPD  = attitude.calculateRollPD(desiredRoll, enableI, gainBlend);
