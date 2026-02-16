@@ -33,7 +33,6 @@ void FlightController::updateTrims(DroneCommand& command, AttitudeTrim& attitude
     float stepDeg = droneConfig.getTrimStepPitchRollDeg();   // degrees (pitch, roll)
     float stepYaw = droneConfig.getTrimStepYawDegPerSec();  // deg/s (yaw)
 
-    // Use sign of TX value so trim works with -1/1 or -100/100 etc. Negative = one direction, positive = other.
     // Pitch: negative = nose down (subtract from trim), positive = nose up (add to trim).
     int16_t pt = command.getPitchTrim();
     if (pt < 0) {

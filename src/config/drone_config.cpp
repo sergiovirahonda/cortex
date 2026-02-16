@@ -13,17 +13,17 @@ DroneConfig::DroneConfig() {
     // =================================================================
     // PID GAINS (12" M2M, 7" props, 1300 KV, ~570 Hz loop)
     // =================================================================
-    // Tuned for stable hand-test: lower Kp + higher Kd = less wobble. If sluggish, raise Kp.
+    // Lower Kp + higher Kd = less wobble. If sluggish, raise Kp.
     //
     // Roll PID
     rollPID.kp = 6.0;
     rollPID.ki = 1.5;
     rollPID.kd = 2.0;
-
-    // Pitch PID (stage 3: Kp > Kd is usual; enough D to damp without overdoing it)
-    pitchPID.kp = 7.0;   // main correction
-    pitchPID.ki = 1.5;   // hold level
-    pitchPID.kd = 2.5;   // damping, but below Kp (high Kd can cause jitter)
+    //
+    // Pitch PID
+    pitchPID.kp = 9.0;   // main correction
+    pitchPID.ki = 1.0;   // hold level
+    pitchPID.kd = 5.0;   // damping
 
     // Yaw gain (P-only; enough to fight twist, not so high it overshoots/wobbles)
     kpYaw = 3.45;
@@ -31,13 +31,13 @@ DroneConfig::DroneConfig() {
     // Launch gains (high KP, PD only; for spool-up / early climb)
     // Pitch slightly stronger to prevent tail dropping back during stage 1
     rollLaunchKp = 16.0f;
-    rollLaunchKd = 3.5f;
-    pitchLaunchKp = 18.0f;   // stronger pitch hold during launch
-    pitchLaunchKd = 4.5f;
+    rollLaunchKd = 3.3f;
+    pitchLaunchKp = 18.0f;
+    pitchLaunchKd = 4.3f;
 
     // Throttle ranges: 1 = high KP (launch), 2 = transition, 3 = low KP (flight)
     // Shorter transition = less time in blend = less stage-2 wobble/vibration
-    throttleIdle = 60;           // below: no corrections
+    throttleIdle = 60;          // below: no corrections
     throttleLaunchEnd = 1350;   // below: 100% launch gains
     throttleFlightStart = 1500; // above: 100% flight; blend 1100–1200 (short transition)
 

@@ -17,8 +17,8 @@ class FlightController {
         unsigned long lastTrimTime;
         
         // Failsafe constants
-        static const unsigned long FAILSAFE_TIMEOUT_MS = 500;
-        static const int16_t FAILSAFE_LANDING_THROTTLE = 1100;
+        static const unsigned long FAILSAFE_TIMEOUT_MS = 1000;
+        static const int16_t FAILSAFE_LANDING_THROTTLE = 1200;
         static const int16_t FAILSAFE_THROTTLE_DECAY = 5;
         
     public:

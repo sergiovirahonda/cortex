@@ -25,7 +25,7 @@ void RadioAdapter::begin() {
     // Match TX configuration
     this->radio.setAutoAck(true);
     this->radio.enableAckPayload();
-    this->radio.setPALevel(RF24_PA_LOW);  // Match TX side
+    this->radio.setPALevel(RF24_PA_HIGH);  // Match TX side
     this->radio.setDataRate(RF24_250KBPS); // Longest Range
     this->radio.setChannel(108); // Avoid WiFi interference (Above 2.48GHz) 
     this->radio.openReadingPipe(1, this->address);
