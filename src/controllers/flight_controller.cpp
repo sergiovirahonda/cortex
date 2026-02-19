@@ -159,7 +159,7 @@ void FlightController::computeAttitudeCorrections(
 
         rollPD  = attitude.calculateRollPD(desiredRoll, enableI, gainBlend);
         pitchPD = attitude.calculatePitchPD(desiredPitch, enableI, gainBlend);
-        yawPD   = attitude.calculateYawP(desiredYaw);
+        yawPD   = attitude.calculateYawPI(desiredYaw, enableI, gainBlend);
     }
 }
 

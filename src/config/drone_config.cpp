@@ -25,8 +25,10 @@ DroneConfig::DroneConfig() {
     pitchPID.ki = 1.0;   // hold level
     pitchPID.kd = 5.0;   // damping
 
-    // Yaw gain (P-only; enough to fight twist, not so high it overshoots/wobbles)
-    kpYaw = 3.45;
+    // Yaw PID
+    yawPID.kp = 0.15;
+    yawPID.ki = 0.03;
+    yawPID.kd = 0.0;
 
     // Launch gains (high KP, PD only; for spool-up / early climb)
     // Pitch slightly stronger to prevent tail dropping back during stage 1
@@ -34,6 +36,7 @@ DroneConfig::DroneConfig() {
     rollLaunchKd = 3.3f;
     pitchLaunchKp = 18.0f;
     pitchLaunchKd = 4.3f;
+    yawLaunchKp = 3.45f;
 
     // Throttle ranges: 1 = high KP (launch), 2 = transition, 3 = low KP (flight)
     // Shorter transition = less time in blend = less stage-2 wobble/vibration
@@ -58,6 +61,7 @@ DroneConfig::DroneConfig() {
     // FEATURE FLAGS
     // =================================================================
     featureFlagEnableAltitudeReading = false;
+    featureFlagEnableDisplay = false;  // set false to disable OLED (no init, no updates)
 }
 
 // Accelerometer offset getters
@@ -112,8 +116,20 @@ float DroneConfig::getPitchKd() const {
 }
 
 // Yaw gain getters
+PIDGains DroneConfig::getYawPID() const {
+    return yawPID;
+}
+
 float DroneConfig::getYawKp() const {
-    return kpYaw;
+    return yawPID.kp;
+}
+
+float DroneConfig::getYawKi() const {
+    return yawPID.ki;
+}
+
+float DroneConfig::getYawKd() const {
+    return yawPID.kd;
 }
 
 // Launch gain getters (PD only)
@@ -129,6 +145,10 @@ float DroneConfig::getPitchLaunchKp() const {
 float DroneConfig::getPitchLaunchKd() const {
     return pitchLaunchKd;
 }
+float DroneConfig::getYawLaunchKp() const {
+    return yawLaunchKp;
+}
+
 
 // Throttle range getters
 int DroneConfig::getThrottleIdle() const {
@@ -166,4 +186,8 @@ float DroneConfig::getTrimStepYawDegPerSec() const {
 // Feature flags getters
 bool DroneConfig::getFeatureFlagEnableAltitudeReading() const {
     return featureFlagEnableAltitudeReading;
+}
+
+bool DroneConfig::getFeatureFlagEnableDisplay() const {
+    return featureFlagEnableDisplay;
 }
