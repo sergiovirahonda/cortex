@@ -23,13 +23,13 @@ class DroneConfig {
         // PID Gains (flight: low KP, full PID)
         PIDGains rollPID;
         PIDGains pitchPID;
-        float kpYaw;
-
+        PIDGains yawPID;
         // Launch gains (high KP, PD only; plain floats, no struct)
         float rollLaunchKp;
         float rollLaunchKd;
         float pitchLaunchKp;
         float pitchLaunchKd;
+        float yawLaunchKp;
 
         // Throttle ranges: idle, launch end, flight start (3 ranges: high KP, transition, low KP)
         int throttleIdle;
@@ -47,6 +47,7 @@ class DroneConfig {
     
         // Feature flags
         bool featureFlagEnableAltitudeReading;
+        bool featureFlagEnableDisplay;
     
     public:
         DroneConfig();
@@ -70,13 +71,17 @@ class DroneConfig {
         float getPitchKd() const;
         
         // Yaw gain getters
+        PIDGains getYawPID() const;
         float getYawKp() const;
+        float getYawKi() const;
+        float getYawKd() const;
 
         // Launch gain getters (PD only)
         float getRollLaunchKp() const;
         float getRollLaunchKd() const;
         float getPitchLaunchKp() const;
         float getPitchLaunchKd() const;
+        float getYawLaunchKp() const;
 
         // Throttle range getters
         int getThrottleIdle() const;
@@ -94,6 +99,7 @@ class DroneConfig {
     
         // Feature flags getters
         bool getFeatureFlagEnableAltitudeReading() const;
+        bool getFeatureFlagEnableDisplay() const;
 };
 
 #endif

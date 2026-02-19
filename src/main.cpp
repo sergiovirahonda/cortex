@@ -1,7 +1,5 @@
 #include <Arduino.h>
 #include <Wire.h>
-#include <Adafruit_GFX.h>
-#include <Adafruit_SSD1306.h>
 #include <MPU6050_light.h>
 #include <RF24.h>
 #include "driver/rmt.h" 
@@ -15,7 +13,9 @@
 #include "adapters/mpu_adapter.h"
 #include "adapters/motor_adapter.h"
 #include "adapters/bmp280_adapter.h"
+#include "adapters/display_adapter.h"
 #include "controllers/flight_controller.h"
+#include "controllers/display_controller.h"
 
 
 // ---------------------------------------------------------
@@ -74,7 +74,8 @@ MPUAdapter mpuAdapter(&mpu);
 BME280Adapter bme280Adapter(&Wire);
 FlightController flightController;
 NativeDShotMotorAdapter esc1, esc2, esc3, esc4;
-Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RST);
+DisplayAdapter displayAdapter(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RST, OLED_ADDR);
+DisplayController displayController(displayAdapter, droneConfig);
 
 static unsigned long lastScreenUpdate = 0;
 static unsigned long lastLoopTime = 0;
@@ -87,21 +88,21 @@ void setup() {
   Wire.begin(I2C_SDA, I2C_SCL);
   Wire.setClock(400000); // Set I2C to 400kHz (Fast Mode)
 
-  // 2. Initialize OLED
-  if(!display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDR)) {
-    Serial.println(F("SSD1306 allocation failed. Checking I2C connection..."));
-    for(;;); // Don't proceed, loop forever
+  // 2. Initialize OLED (only when display feature enabled)
+  if (droneConfig.getFeatureFlagEnableDisplay()) {
+    if (!displayAdapter.begin()) {
+      Serial.println(F("SSD1306 allocation failed. Checking I2C connection..."));
+      for (;;); // Don't proceed, loop forever
+    }
+    displayAdapter.clearDisplay();
+    displayAdapter.invertDisplay(false);
+    displayAdapter.setTextSize(1);
+    displayAdapter.setTextColor(DISPLAY_COLOR_WHITE);
   }
-  // 4. Set Text Properties
-  display.clearDisplay();
-  display.invertDisplay(false);
-  display.setTextSize(1);             // Normal 1:1 pixel scale
-  display.setTextColor(SSD1306_WHITE); // Draw white text
-  display.setCursor(0,0); 
-
-  // 2. Initialize Drivers (BUT DO NOT ARM YET)
-  display.println("Initializing adapters...");
-  display.display();
+  displayController.setCursor(0, 0);
+  displayController.println("Initializing adapters...");
+  
+  displayController.display();
 
   // Initialize ESCs
   esc1.init(M1_PIN, RMT_CHANNEL_0);
@@ -111,22 +112,22 @@ void setup() {
 
   // Initialize radio & MPU drivers
   radioAdapter.begin();
-  if (!radioAdapter.isChipConnected()){
-    display.println("Radio: FAIL");
-    display.println("Check Wiring!");
-    display.display();
+  if (!radioAdapter.isChipConnected()) {
+    displayController.println("Radio: FAIL");
+    displayController.println("Check Wiring!");
+    displayController.display();
     while (1); // Stop here
   }
   mpuAdapter.begin();
   bme280Adapter.begin();
-  display.println("Radio status: OK");
-  display.println("MPU status: OK");
-  display.println(bme280Adapter.isConnected() ? "BME280: OK" : "BME280: --");
-  display.display();
+  displayController.println("Radio status: OK");
+  displayController.println("MPU status: OK");
+  displayController.println(bme280Adapter.isConnected() ? "BME280: OK" : "BME280: --");
+  displayController.display();
   delay(5);
 
-  display.println("Initializing DLPF...");
-  display.display();
+  displayController.println("Initializing DLPF...");
+  displayController.display();
   // ENABLE HARDWARE DLPF (The "Vibration Shield")
   // We write directly to the MPU register 0x1A
   Wire.beginTransmission(0x68); // MPU Address
@@ -136,23 +137,23 @@ void setup() {
   // TUNE SOFTWARE FILTER
   // 0.98 is default. 
   // Increase to 0.99 if you see angles jumping when motors spin.
-  display.println("Calibrating MPU9260...");
-  display.display();
+  displayController.println("Calibrating MPU6050...");
+  displayController.display();
   mpuAdapter.calibrate(droneConfig);
-  display.println("Calibration completed.");
-  display.display();
+  displayController.println("Calibration completed.");
+  displayController.display();
 
   // ============================================================
   // 5. ARMING SEQUENCE
   // ============================================================
   // The MPU is ready. The Radio is ready. 
   // Now we wake up the ESCs immediately before flying.
-  
-  display.clearDisplay();
-  display.setCursor(0,0);
-  display.println("ARMING MOTORS...");
-  display.println("STAND CLEAR!");
-  display.display();
+
+  displayController.clearDisplay();
+  displayController.setCursor(0, 0);
+  displayController.println("ARMING MOTORS...");
+  displayController.println("STAND CLEAR!");
+  displayController.display();
 
   // A. Wake up (Send 0) - 3 Seconds
   for(int i=0; i<300; i++) {
@@ -177,8 +178,7 @@ void setup() {
   esc2.sendThrottle(200); 
   esc3.sendThrottle(200); 
   esc4.sendThrottle(200);
-
-  display.println("Resetting PID...");
+  displayController.println("Resetting PID...");
   attitude.resetPID();
 }
 
@@ -236,37 +236,17 @@ void loop() {
   flightController.updateTrims(command, attitudeTrim, droneConfig);
 
   // ================================================================
-  // 2. SLOW LOOP (HUMAN INTERFACE)
+  // 2. DISPLAY LOOP (HUMAN INTERFACE)
   // ================================================================
   
-  if (millis() - lastScreenUpdate > 1000) { 
-    
-    // Refresh display
-    display.clearDisplay();
-    display.setCursor(0,0);
-    // Loop frequency
-    display.print("- @ "); display.print((int)loopFrequencyHz); display.println(" Hz -");
-    // Print readings
-    display.print("P: "); display.print(attitude.getPitchAngle());
-    display.print(" | R: "); display.println(attitude.getRollAngle());
-    display.print("Y: "); display.print(attitude.getYawRate());
-    display.print(" | T: "); display.println(command.getThrottle());
-
-    // Print motor output PWM values
-    display.print("M1: "); display.print(motorOutput.getMotor1Speed());
-    display.print(" | M2: "); display.println(motorOutput.getMotor2Speed());
-    display.print("M3: "); display.print(motorOutput.getMotor3Speed());
-    display.print(" | M4: "); display.println(motorOutput.getMotor4Speed());
-    display.print("Trims: ");
-    display.print("P: "); display.print(attitudeTrim.getPitchTrim());
-    display.print(" | R: "); display.print(attitudeTrim.getRollTrim());
-    display.print(" | Y: "); display.println(attitudeTrim.getYawTrim());
-    // BME280: altitude (read only in screen loop)
-    if (droneConfig.getFeatureFlagEnableAltitudeReading()) {
-      float altM = bme280Adapter.readAltitudeMeters();
-      display.print("Alt: "); display.print(altM, 1); display.println(" m");
-    }
-    display.display();
+  if (millis() - lastScreenUpdate > 1000) {
+    displayController.displayFlightMetrics(
+      loopFrequencyHz,
+      attitude,
+      command,
+      motorOutput,
+      attitudeTrim
+    );
     lastScreenUpdate = millis();
   }
 }

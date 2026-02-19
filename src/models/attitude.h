@@ -28,6 +28,7 @@ private:
     // Memory variables for the I-Term
     float rollErrorSum = 0;
     float pitchErrorSum = 0;
+    float yawErrorSum = 0;
     
     // Time for loop-rate-independent integral (dt in seconds)
     unsigned long lastTime = 0;
@@ -47,11 +48,12 @@ public:
         // Calculate PID Outputs (gainBlend: 0 = launch high KP, 1 = flight low KP; I only when enableI)
         float calculateRollPD(float desiredRollAngle, bool enableI, float gainBlend = 1.0f);
         float calculatePitchPD(float desiredPitchAngle, bool enableI, float gainBlend = 1.0f);
-        float calculateYawP(float desiredYawRate);
+        float calculateYawPI(float desiredYawRate, bool enableI, float gainBlend = 1.0f);
         // Add a reset method (Critical for safety!)
         void resetPID() {
             rollErrorSum = 0;
             pitchErrorSum = 0;
+            yawErrorSum = 0;
         }
 };
 
