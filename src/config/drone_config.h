@@ -1,6 +1,8 @@
 #ifndef DRONE_CONFIG_H
 #define DRONE_CONFIG_H
 
+#include <Arduino.h>
+
 // Structure for accelerometer offset configuration
 struct AccelerometerOffsetConfig {
     float xOffset;
@@ -48,6 +50,9 @@ class DroneConfig {
         // Feature flags
         bool featureFlagEnableAltitudeReading;
         bool featureFlagEnableDisplay;
+
+        // Radio (nRF24L01 pipe address; must match TX)
+        byte radioAddress[6];
     
     public:
         DroneConfig();
@@ -100,6 +105,9 @@ class DroneConfig {
         // Feature flags getters
         bool getFeatureFlagEnableAltitudeReading() const;
         bool getFeatureFlagEnableDisplay() const;
+
+        // Radio address getter (for RadioAdapter; must match TX address)
+        const byte* getRadioAddress() const;
 };
 
 #endif

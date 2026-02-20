@@ -62,6 +62,11 @@ DroneConfig::DroneConfig() {
     // =================================================================
     featureFlagEnableAltitudeReading = false;
     featureFlagEnableDisplay = false;  // set false to disable OLED (no init, no updates)
+
+    // =================================================================
+    // RADIO (nRF24L01 pipe address; must match Synapse TX)
+    // =================================================================
+    memcpy(radioAddress, "00001", 6);
 }
 
 // Accelerometer offset getters
@@ -190,4 +195,8 @@ bool DroneConfig::getFeatureFlagEnableAltitudeReading() const {
 
 bool DroneConfig::getFeatureFlagEnableDisplay() const {
     return featureFlagEnableDisplay;
+}
+
+const byte* DroneConfig::getRadioAddress() const {
+    return radioAddress;
 }
