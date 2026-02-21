@@ -14,45 +14,20 @@
 #include "adapters/motor_adapter.h"
 #include "adapters/bmp280_adapter.h"
 #include "adapters/display_adapter.h"
+#include "adapters/tf_luna_adapter.h"
+#include "adapters/gps_adapter.h"
+#include "adapters/compass_adapter.h"
 #include "controllers/flight_controller.h"
 #include "controllers/display_controller.h"
-
-
-// ---------------------------------------------------------
-// PIN DEFINITIONS
-// ---------------------------------------------------------
-// Radio & screen
-#define I2C_SDA 17
-#define I2C_SCL 18
-#define OLED_RST 21
-#define RADIO_CE_PIN 14
-#define RADIO_CSN_PIN 9
-
-// Motors
-#define M1_PIN 4  // Motor 1 (Rear Right): Spins CCW
-#define M2_PIN 5  // Motor 2 (Front Right): Spins CW
-#define M3_PIN 6  // Motor 3 (Rear Left): Spins CW
-#define M4_PIN 7  // Motor 4 (Front Left): Spins CCW
-
-// ---------------------------------------------------------
-// SCREEN DEFINITIONS
-// ---------------------------------------------------------
-#define SCREEN_WIDTH 128
-#define SCREEN_HEIGHT 64
-#define OLED_ADDR 0x3C // Almost all 0.96" OLEDs are 0x3C
-#define MPU_ADDR 0x68
+#include "tasks/avionics_task.h"
+#include "config/pins.h"
 
 // =================================================================
 // MPU-6050 OBJECT AND VARIABLES
 // =================================================================
 
 // Initialize the MPU-6050 sensor object
-MPU6050 mpu(Wire);
-
-// =================================================================
-// RADIO CONFIGURATIONS
-// =================================================================
-byte NRF_RX_ADDRESS[6] = "00001";
+MPU6050 mpu(Wire1);
 
 // =================================================================
 // ADAPTER AND CONTROLLER OBJECTS
@@ -68,13 +43,18 @@ AttitudeTrim attitudeTrim;
 RadioAdapter radioAdapter(
     RADIO_CE_PIN,
     RADIO_CSN_PIN,
-    NRF_RX_ADDRESS
+    const_cast<byte*>(droneConfig.getRadioAddress())
 );
 MPUAdapter mpuAdapter(&mpu);
 BME280Adapter bme280Adapter(&Wire);
 FlightController flightController;
 NativeDShotMotorAdapter esc1, esc2, esc3, esc4;
 DisplayAdapter displayAdapter(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RST, OLED_ADDR);
+HardwareSerial TFLunaSerial(1);
+HardwareSerial GpsSerial(2);
+TFLunaAdapter tfLuna(&TFLunaSerial);
+GpsAdapter gps(&GpsSerial, GPS_BAUD, GPS_RX_PIN, GPS_TX_PIN);
+CompassAdapter compass;
 DisplayController displayController(displayAdapter, droneConfig);
 
 static unsigned long lastScreenUpdate = 0;
@@ -84,9 +64,13 @@ static float loopFrequencyHz = 0.0f;
 void setup() {
   Serial.begin(115200);
 
-  // 1. Initialize I2C with your specific pins
+  // 1. Avionics Bus (Core 0)
   Wire.begin(I2C_SDA, I2C_SCL);
-  Wire.setClock(400000); // Set I2C to 400kHz (Fast Mode)
+  Wire.setClock(400000); 
+
+  // 2. Flight Control Bus (Core 1)
+  Wire1.begin(MPU_SDA, MPU_SCL);
+  Wire1.setClock(400000); // Fast mode for rapid gyro polling
 
   // 2. Initialize OLED (only when display feature enabled)
   if (droneConfig.getFeatureFlagEnableDisplay()) {
@@ -126,14 +110,25 @@ void setup() {
   displayController.display();
   delay(5);
 
+  // Initialize LIDAR, GPS, and Compass
+  displayController.println("Initializing LIDAR, GPS, and Compass...");
+  displayController.display();
+  compass.begin();
+  TFLunaSerial.begin(115200, SERIAL_8N1, TF_LUNA_RX_PIN, TF_LUNA_TX_PIN);
+  tfLuna.begin();
+  gps.begin();
+
+  displayController.println("LIDAR, GPS, and Compass initialized.");
+  displayController.display();
+
   displayController.println("Initializing DLPF...");
   displayController.display();
   // ENABLE HARDWARE DLPF (The "Vibration Shield")
   // We write directly to the MPU register 0x1A
-  Wire.beginTransmission(0x68); // MPU Address
-  Wire.write(0x1A);             // Register: CONFIG
-  Wire.write(0x03);             // Value: DLPF_CFG = 3 (44Hz bandwidth)
-  Wire.endTransmission();
+  Wire1.beginTransmission(0x68); // MPU Address
+  Wire1.write(0x1A);             // Register: CONFIG
+  Wire1.write(0x03);             // Value: DLPF_CFG = 3 (44Hz bandwidth)
+  Wire1.endTransmission();
   // TUNE SOFTWARE FILTER
   // 0.98 is default. 
   // Increase to 0.99 if you see angles jumping when motors spin.
@@ -180,11 +175,26 @@ void setup() {
   esc4.sendThrottle(200);
   displayController.println("Resetting PID...");
   attitude.resetPID();
+
+  // D. Init cross-core sync then launch the avionics task
+  initAvionicsMutex();
+  static AvionicsParams avionicsParams;
+  avionicsParams.lidar = &tfLuna;
+  avionicsParams.gps = &gps;
+  avionicsParams.compass = &compass;
+  startAvionicsTask(&avionicsParams, 0);
 }
 
 void loop() {
+
   // ================================================================
-  // 1. FAST LOOP (FLIGHT CRITICAL) - Runs every cycle (~1kHz)
+  // 0. THREAD-SAFE DATA FETCH (cross-core mutex)
+  // ================================================================
+  AvionicsMetrics localAvionics;
+  getAvionicsMetrics(localAvionics);
+
+  // ================================================================
+  // 1. FAST LOOP (FLIGHT CRITICAL) - 1000Hz
   // ================================================================
   
   // Measure loop frequency (running average so display shows ~average Hz, not fast/slow alternation)
@@ -236,17 +246,20 @@ void loop() {
   flightController.updateTrims(command, attitudeTrim, droneConfig);
 
   // ================================================================
-  // 2. DISPLAY LOOP (HUMAN INTERFACE)
+  // 2. DISPLAY LOOP (HUMAN INTERFACE) - Ground Only!
   // ================================================================
-  
-  if (millis() - lastScreenUpdate > 1000) {
-    displayController.displayFlightMetrics(
-      loopFrequencyHz,
-      attitude,
-      command,
-      motorOutput,
-      attitudeTrim
-    );
-    lastScreenUpdate = millis();
+
+  // Only update screen if throttle is at absolute zero to prevent PID stutter
+  if (command.getThrottle() < 300) {
+    if (millis() - lastScreenUpdate > 1000) {
+      // It's safe to pause the PID loop because the motors are idle
+      displayController.displayFlightMetrics(
+        loopFrequencyHz, attitude, command, motorOutput, attitudeTrim
+      );
+      lastScreenUpdate = millis();
+    }
+  } else {
+    // Optional: clear screen or show a static "ARMED" message once, 
+    // then stop touching the I2C bus completely.
   }
 }

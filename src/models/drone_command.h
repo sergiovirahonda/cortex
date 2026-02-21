@@ -2,6 +2,7 @@
 #define DRONE_COMMAND_H
 
 #include <Arduino.h>
+#include <cstdint>
 
 // --- THE WIRE FORMAT ---
 // This struct is strictly for radio transmission.
@@ -72,11 +73,11 @@ class DroneCommand {
         void loadFromPacket(DronePacket packet);
 };
 
-// --- TELEMETRY WIRE FORMAT ---
+// --- TELEMETRY WIRE FORMAT (6 bytes: pwm, roll, pitch only) ---
 struct TelemetryPacket {
-    int16_t pwm;   // Motor PWM
-    int16_t roll;  // Roll (e.g. x100 for degrees)
-    int16_t pitch; // Pitch (e.g. x100 for degrees)
+    int16_t pwm;   // Throttle (command)
+    int16_t roll;  // Roll angle (e.g. x100 for degrees)
+    int16_t pitch; // Pitch angle (e.g. x100 for degrees)
 } __attribute__((packed));
 
 class TelemetryData {

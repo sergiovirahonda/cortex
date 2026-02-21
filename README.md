@@ -15,7 +15,9 @@ Cortex is the flight control system (FC) for your DIY drone project. It receives
 * 📺 **OLED Telemetry Display**: Real-time flight data on the drone (attitude, throttle, motor outputs, trims)
 * 📤 **Radio Telemetry Downlink**: Sends throttle, roll, and pitch back to the transmitter via nRF24 ACK payload (for Synapse display)
 * 🔒 **Safety Features**: Arming sequence, throttle limits, and hardware initialization checks
-* 🏗️ **Clean Architecture**: Modular design with adapters, models, and controllers
+* 🧵 **Dual-Core Design**: Flight loop on core 1 (~1 kHz); avionics task on core 0 samples LIDAR, GPS, compass with cross-core mutex for thread-safe reads
+* 📏 **Optional Avionics**: TF-Luna LIDAR, GPS (UART), and compass (I2C) supported; adapters are null-safe so sensors can be omitted per build
+* 🏗️ **Clean Architecture**: Modular design with adapters, models, controllers, and tasks
 * ⚙️ **PlatformIO Integration**: Modern build system with dependency management
 
 ## Hardware Requirements
@@ -34,12 +36,18 @@ Cortex is the flight control system (FC) for your DIY drone project. It receives
 
 | Component | Pin | ESP32-S3 Pin | Notes |
 |-----------|-----|--------------|-------|
-| **I2C Bus** | | | |
-| OLED SDA | - | GPIO 17 | Shared I2C bus |
-| OLED SCL | - | GPIO 18 | Shared I2C bus |
-| MPU6050 SDA | - | GPIO 17 | Shared I2C bus |
-| MPU6050 SCL | - | GPIO 18 | Shared I2C bus |
-| OLED RST | - | GPIO 21 | Optional reset pin |
+| **I2C Bus 0** (OLED & Compass) | | | |
+| I2C SDA | - | GPIO 1 | OLED, compass |
+| I2C SCL | - | GPIO 2 | OLED, compass |
+| OLED RST | - | GPIO 21 | Optional reset |
+| **I2C Bus 1** (MPU6050, flight-critical) | | | |
+| MPU SDA | - | GPIO 17 | Dedicated for gyro polling |
+| MPU SCL | - | GPIO 18 | 400 kHz |
+| **UART** | | | |
+| TF-Luna RX | - | GPIO 39 | UART1 (LIDAR) |
+| TF-Luna TX | - | GPIO 40 | UART1, 115200 |
+| GPS RX | - | GPIO 41 | UART2 |
+| GPS TX | - | GPIO 42 | UART2, 115200 |
 | **Radio (SPI)** | | | |
 | nRF24L01 CE | - | GPIO 14 | Chip Enable |
 | nRF24L01 CSN | - | GPIO 9 | Chip Select |
@@ -79,20 +87,30 @@ The drone uses a standard X-frame quadcopter configuration:
 ```
 cortex/
 ├── src/
-│   ├── main.cpp                    # Main control loop & initialization
+│   ├── main.cpp                    # Main loop (core 1), setup, init
 │   ├── config/
-│   │   └── drone_config.*          # PID gains, throttle bands, limits, trim steps
+│   │   ├── drone_config.*          # PID gains, throttle bands, limits, trim, radio address
+│   │   └── pins.h                  # GPIO and bus definitions
 │   ├── controllers/
-│   │   └── flight_controller.*     # Throttle stages, mixing matrix, trims, failsafe
+│   │   ├── flight_controller.*     # Throttle stages, mixing matrix, trims, failsafe
+│   │   └── display_controller.*    # OLED output (gated by feature flag)
+│   ├── tasks/
+│   │   └── avionics_task.*         # FreeRTOS task (core 0): LIDAR/GPS/compass, mutex-protected
 │   ├── adapters/
 │   │   ├── radio_adapter.*         # nRF24L01: receive commands, send telemetry (ACK payload)
 │   │   ├── mpu_adapter.*           # MPU6050 sensor interface
 │   │   ├── motor_adapter.*         # DShot ESC control (native)
+│   │   ├── display_adapter.*      # SSD1306 OLED
+│   │   ├── tf_luna_adapter.*      # TF-Luna LIDAR (UART)
+│   │   ├── gps_adapter.*          # GPS (UART)
+│   │   ├── compass_adapter.*      # Compass (I2C bus 0)
 │   │   └── bmp280_adapter.*        # BME280 barometer (optional, feature-flagged)
 │   └── models/
 │       ├── attitude.*              # Attitude state & PID (roll/pitch/yaw)
-│       ├── drone_command.*         # DronePacket (commands), TelemetryPacket (downlink)
+│       ├── drone_command.*        # DronePacket (commands), TelemetryData (downlink)
 │       ├── motor_output.*          # Motor speed outputs
+│       ├── avionics_params.h       # Adapter pointers for avionics task
+│       ├── avionics_metrics.h       # LidarReadings, GpsReadings, CompassReadings
 │       └── ...
 └── platformio.ini                  # Build configuration
 ```
@@ -101,15 +119,17 @@ cortex/
 
 * **FlightController**: Throttle-band logic (launch / transition / flight), motor mixing matrix, trim updates, failsafe
 * **Attitude**: Sensor state and PID: roll/pitch (PD + I in flight), yaw (P only); launch vs flight gains via blend
-* **DroneConfig**: All tunable constants (PID gains, throttle bands, limits, trim steps) in one place
+* **DroneConfig**: All tunable constants (PID gains, throttle bands, limits, trim steps, radio address) in one place
 * **RadioAdapter**: nRF24L01 init, receive `DronePacket` (commands), send `TelemetryData` as ACK payload
-* **MPUAdapter**: MPU6050 interface, calibration, filtering
-* **NativeDShot**: ESP32 RMT-based DShot600 for ESC control
+* **MPUAdapter**: MPU6050 interface, calibration, filtering (on I2C bus 1 for minimal interference)
+* **NativeDShotMotorAdapter**: ESP32 RMT-based DShot600 for ESC control
+* **Avionics task**: FreeRTOS task pinned to **core 0**. Samples LIDAR, GPS, and compass at ~100 Hz; updates a global `AvionicsMetrics` struct under a **FreeRTOS mutex**. The main loop on **core 1** calls `getAvionicsMetrics(localAvionics)` for a thread-safe copy. Adapter pointers are null-checked so optional sensors can be omitted.
 
 ### Control Loop
 
-The flight controller runs at **~1 kHz** (fast loop):
+**Core 1** runs the flight loop at **~1 kHz**:
 
+0. **Thread-safe avionics snapshot**: `getAvionicsMetrics(localAvionics)` (mutex-protected copy of LIDAR/GPS/compass; reserved for future altitude/position/heading use).
 1. **Receive Radio**: Check for new command packet from transmitter
 2. **Update command & send telemetry**: If packet received, load command, remap, then send telemetry (throttle, roll, pitch) back via ACK payload
 3. **Failsafe**: Update failsafe state; override command if link lost
@@ -119,7 +139,7 @@ The flight controller runs at **~1 kHz** (fast loop):
 7. **Write Motors**: DShot to all 4 ESCs
 8. **Update Trims**: Process trim buttons from command (debounced)
 
-A **1 Hz** slow loop updates the OLED with loop rate, attitude, throttle, motor outputs, and trims.
+The OLED is updated at **~1 Hz** only when throttle is below 300 (idle), to avoid I2C bus contention with the flight loop. Loop frequency, attitude, throttle, motor outputs, and trims are shown.
 
 ## Installation
 
@@ -147,9 +167,9 @@ A **1 Hz** slow loop updates the OLED with loop rate, attitude, throttle, motor 
 
 3. **Configure radio address**
    
-   Edit `src/main.cpp` to match your Synapse transmitter address:
+   Edit `src/config/drone_config.cpp` so the RX address matches your Synapse transmitter:
    ```cpp
-   byte NRF_RX_ADDRESS[6] = "00001";  // Must match transmitter address
+   memcpy(radioAddress, "00001", 6);  // Must match transmitter pipe address
    ```
 
 4. **Build and upload**
@@ -171,9 +191,13 @@ A **1 Hz** slow loop updates the OLED with loop rate, attitude, throttle, motor 
 The radio adapter is configured to match the Synapse transmitter:
 
 * **Data Rate**: 250KBPS (longest range)
-* **Power Level**: PA_LOW (adjustable for range vs. power consumption)
+* **Power Level**: PA_HIGH (match Synapse TX for range)
 * **Channel**: 108 (above 2.48GHz to avoid WiFi interference)
 * **Auto-ACK**: Enabled with ACK payload (used for telemetry downlink)
+
+### Avionics Task (LIDAR, GPS, Compass)
+
+Optional sensors (TF-Luna LIDAR, GPS module, compass) are sampled on **core 0** in a FreeRTOS task. Before the task starts, `initAvionicsMutex()` is called so the main loop can safely read a snapshot with `getAvionicsMetrics()`. The task only updates adapters that are non-null in `AvionicsParams`, so you can omit a sensor by not wiring it and leaving its pointer null in your build (the default setup assigns all three). Avionics data is currently collected for future use (e.g. altitude hold, position hold).
 
 ### Telemetry (Downlink to Transmitter)
 
@@ -190,10 +214,10 @@ Cortex sends a small telemetry payload back to the transmitter on every received
 **Flow:**
 1. Transmitter (Synapse) sends a `DronePacket` (commands).
 2. Cortex receives it, updates command, then calls `radioAdapter.sendTelemetry(telemetry)`.
-3. `sendTelemetry` uses `radio.writeAckPayload(1, &data, sizeof(TelemetryData))`, so the next ACK for pipe 1 carries the telemetry.
-4. Synapse can read the ACK payload and display throttle, roll, and pitch on the TX screen.
+3. The radio sends the telemetry as the ACK payload for pipe 1 (6-byte fixed payload).
+4. Synapse reads the ACK payload and displays throttle, roll, and pitch on the TX screen.
 
-**Implementation:** Telemetry is filled in the fast loop when a packet is received (`main.cpp`): `telemetry.setPwm(command.getThrottle())`, `setRoll(attitude.getRollAngle())`, `setPitch(attitude.getPitchAngle())`, then `radioAdapter.sendTelemetry(telemetry)`.
+**Implementation:** When a packet is received (`main.cpp`), the fast loop sets `telemetry.setPwm(command.getThrottle())`, `setRoll(attitude.getRollAngle())`, `setPitch(attitude.getPitchAngle())`, then `radioAdapter.sendTelemetry(telemetry)`. LIDAR, GPS, and compass are sampled in the avionics task but are not currently sent over telemetry (reserved for future use).
 
 ### PID Tuning
 
@@ -271,7 +295,7 @@ The flight controller performs an automatic arming sequence on startup:
 ### Flight Operation
 
 1. **Power on** the drone (3S LiPo battery)
-2. **Wait** for arming sequence to complete (OLED will show "SYSTEM RUNNING")
+2. **Wait** for arming sequence to complete (OLED shows "ARMING MOTORS... STAND CLEAR!" then flight metrics when idle)
 3. **Verify** radio connection (check that commands are received)
 4. **Control** the drone using the Synapse transmitter
 5. **Monitor** telemetry on OLED display:
@@ -319,7 +343,7 @@ Trims: P: 0.2 | R: -0.4 | Y: 0
 
 ### Drone Oscillating or Unstable
 
-* **Reduce PID gains**: Lower Kp and Kd values in `attitude.cpp`
+* **Reduce PID gains**: Lower Kp and Kd values in `src/config/drone_config.cpp`
 * **Increase DLPF**: Adjust hardware filter or increase software filter coefficient
 * **Check motor balance**: Ensure all motors spin smoothly
 * **Verify propellers**: Check for damage or incorrect mounting
@@ -351,15 +375,16 @@ pio device monitor
 
 ### Code Structure
 
-* **Adapters**: Hardware interface layers (radio, MPU, motors)
-* **Models**: Data structures and business logic (attitude, commands, outputs)
-* **Controllers**: High-level control algorithms (flight controller, mixing)
+* **Adapters**: Hardware interface layers (radio, MPU, motors, display, LIDAR, GPS, compass)
+* **Models**: Data structures and business logic (attitude, commands, outputs, avionics metrics)
+* **Controllers**: High-level control algorithms (flight controller, display)
+* **Tasks**: FreeRTOS tasks (e.g. avionics task on core 0 with mutex-protected shared state)
 
 ### Adding Features
 
 * **Altitude Hold**: BME280 adapter exists (feature-flagged); add altitude PID loop
-* **GPS Navigation**: Integrate GPS module for position hold
-* **Telemetry Downlink**: Implemented (throttle, roll, pitch via ACK payload); extend `TelemetryPacket` for more fields if Synapse supports it
+* **GPS / LIDAR / Compass on Telemetry**: Avionics task already samples these; add fields to `TelemetryPacket` and Synapse display (keep packet ≤ 16 bytes for fixed payload), or use onboard only (e.g. altitude hold, position hold)
+* **Telemetry Downlink**: Implemented (throttle, roll, pitch via ACK payload; 6-byte fixed packet)
 * **LED Indicators**: Add status LEDs for visual feedback
 
 ## Related Projects
