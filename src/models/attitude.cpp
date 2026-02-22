@@ -136,37 +136,25 @@ float Attitude::calculatePitchPD(float desiredPitchAngle, bool enableI, float ga
     return constrain(output, -droneConfig.getMaxPDOutput(), droneConfig.getMaxPDOutput());
 }
 
+// Yaw: PI only (rate loop). D term on rate amplifies gyro noise; avoid it. If wobble, try lowering Kp/Ki.
 float Attitude::calculateYawPI(float desiredYawRate, bool enableI, float gainBlend) {
-    // 1. Calculate Error (Setpoint - Measurement)
     float error = desiredYawRate - this->yawRate;
-    
-    // 2. Proportional Term with Blending
-    // Blends from LaunchKp (blend=0) to FlightKp (blend=1)
+
     float kP = (1.0f - gainBlend) * droneConfig.getYawLaunchKp() + gainBlend * droneConfig.getYawKp();
     float P = kP * error;
 
-    // 3. Integral Term (The "Heading Lock")
     float I = 0;
     float kI = droneConfig.getYawKi();
-
     if (enableI && kI > 0.0f) {
-        // Use the stored lastDt from the main loop
         this->yawErrorSum += error * lastDt;
-        
-        // Anti-Windup
         float maxI = droneConfig.getMaxIOutput();
-        this->yawErrorSum = constrain(
-            this->yawErrorSum,
-            -maxI / kI,
-            maxI / kI
-        );
+        this->yawErrorSum = constrain(this->yawErrorSum, -maxI / kI, maxI / kI);
         I = kI * this->yawErrorSum;
     } else {
         this->yawErrorSum = 0;
         I = 0;
     }
 
-    // Combined PI output
     float output = P + I;
 
     return constrain(
