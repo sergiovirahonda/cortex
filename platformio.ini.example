@@ -1,0 +1,81 @@
+; Copy this file to platformio.ini and adjust the values for your board and tuning.
+; platformio.ini is gitignored so your local config is never committed.
+
+[env:esp32-s3-n16r8]
+platform = espressif32
+board = esp32-s3-devkitc-1
+framework = arduino
+
+; -----------------------------------------------------------------
+; MEMORY SETTINGS
+; -----------------------------------------------------------------
+board_upload.flash_size = 16MB
+board_build.partitions = default_16MB.csv
+board_build.arduino.memory_type = qio_opi
+build_flags =
+    -DBOARD_HAS_PSRAM
+    -mfix-esp32-psram-cache-issue
+    ; ----- PINS (override for your wiring) -----
+    -D RADIO_CE_PIN=14
+    -D RADIO_CSN_PIN=9
+    -D M1_PIN=4
+    -D M2_PIN=5
+    -D M3_PIN=6
+    -D M4_PIN=7
+    -D GPS_RX_PIN=41
+    -D GPS_TX_PIN=42
+    -D GPS_BAUD=115200
+    -D TF_LUNA_RX_PIN=39
+    -D TF_LUNA_TX_PIN=40
+    -D I2C_SDA=1
+    -D I2C_SCL=2
+    -D OLED_RST=21
+    -D MPU_SDA=17
+    -D MPU_SCL=18
+    -D SCREEN_WIDTH=128
+    -D SCREEN_HEIGHT=64
+    -D OLED_ADDR=0x3C
+    -D MPU_ADDR=0x68
+    ; ----- DRONE CONFIG (PID, throttle, trim, feature flags) -----
+    -D ACCEL_X_OFFSET=0.0350f
+    -D "ACCEL_Y_OFFSET=-0.0035f"
+    -D "ACCEL_Z_OFFSET=-0.0600f"
+    -D ROLL_KP=6.0f
+    -D ROLL_KI=1.5f
+    -D ROLL_KD=2.0f
+    -D PITCH_KP=9.0f
+    -D PITCH_KI=1.0f
+    -D PITCH_KD=5.0f
+    -D YAW_KP=0.15f
+    -D YAW_KI=0.03f
+    -D YAW_KD=0.0f
+    -D ROLL_LAUNCH_KP=16.0f
+    -D ROLL_LAUNCH_KD=3.3f
+    -D PITCH_LAUNCH_KP=18.0f
+    -D PITCH_LAUNCH_KD=4.3f
+    -D YAW_LAUNCH_KP=3.45f
+    -D THROTTLE_IDLE=60
+    -D THROTTLE_LAUNCH_END=1350
+    -D THROTTLE_FLIGHT_START=1500
+    -D MAX_PD_OUTPUT=300.0f
+    -D MAX_I_OUTPUT=60.0f
+    -D TRIM_DELAY=250
+    -D TRIM_STEP_PITCH_ROLL_DEG=0.2f
+    -D TRIM_STEP_YAW_DEG_PER_SEC=2.0f
+    -D FEATURE_FLAG_ALTITUDE=0
+    -D FEATURE_FLAG_DISPLAY=0
+    ; ----- YAW STICK (deg/s at full stick; higher = snappier, default 120) -----
+    ; -D MAX_YAW_RATE_DPS=150
+
+lib_deps =
+    mikalhart/TinyGPSPlus @ ^1.0.3
+    adafruit/Adafruit SSD1306 @ ^2.5.7
+    adafruit/Adafruit GFX Library @ ^1.11.5
+    adafruit/Adafruit BME280 Library @ ^2.3.0
+    adafruit/Adafruit Unified Sensor @ ^1.1.14
+    rfetick/MPU6050_light @ ^1.1.0
+    https://github.com/mprograms/QMC5883LCompass.git @ ^1.2.3
+    RF24
+    nRF24L01
+
+monitor_speed = 115200

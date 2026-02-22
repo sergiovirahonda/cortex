@@ -157,20 +157,25 @@ The OLED is updated at **~1 Hz** only when throttle is below 300 (idle), to avoi
    cd cortex
    ```
 
-2. **Install dependencies**
+2. **Create your local config**
    
-   PlatformIO will automatically install required libraries:
+   Copy the example config and rename it to `platformio.ini` (this file is gitignored so your local settings are never committed):
+   ```bash
+   cp platformio.ini.example platformio.ini
+   ```
+   
+   Then open `platformio.ini` and adjust the values for your board:
+   * **Pins** (e.g. `RADIO_CE_PIN`, `M1_PIN`, `I2C_SDA`, …) — match your wiring.
+   * **Drone config** (PID gains, throttle bands, trim, feature flags) — tune as needed.
+   * Radio address is hardcoded in `src/config/drone_config.cpp`; edit that file if you need to change it to match your Synapse transmitter.
+
+3. **Install dependencies**
+   
+   PlatformIO will automatically install required libraries when you build:
    * `RF24` - nRF24L01 radio driver
    * `MPU6050_light` - MPU6050 sensor library
    * `Adafruit SSD1306` - OLED display driver
    * `Adafruit GFX Library` - Graphics library for display
-
-3. **Configure radio address**
-   
-   Edit `src/config/drone_config.cpp` so the RX address matches your Synapse transmitter:
-   ```cpp
-   memcpy(radioAddress, "00001", 6);  // Must match transmitter pipe address
-   ```
 
 4. **Build and upload**
    ```bash
@@ -185,6 +190,10 @@ The OLED is updated at **~1 Hz** only when throttle is below 300 (idle), to avoi
    You should see initialization messages, calibration progress, and arming sequence.
 
 ## Configuration
+
+### Pins and drone config (platformio.ini)
+
+Pins (GPIO, I2C, UART) and all drone tuning (PID gains, throttle bands, trim, feature flags) are set via **build_flags** in `platformio.ini`. Copy `platformio.ini.example` to `platformio.ini`, then edit the `build_flags` section to match your wiring and tuning. Defaults are in `src/config/pins_defaults.h` and `src/config/drone_config_defaults.h` if a flag is not defined. The radio pipe address is hardcoded in `src/config/drone_config.cpp`; change it there to match your Synapse transmitter.
 
 ### Radio Settings
 

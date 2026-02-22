@@ -1,71 +1,48 @@
 #include "drone_config.h"
+#include "drone_config_defaults.h"
 
 DroneConfig::DroneConfig() {
     // =================================================================
-    // ACCELEROMETER OFFSETS
+    // ACCELEROMETER OFFSETS (from build_flags or drone_config_defaults.h)
     // =================================================================
-    // These offsets ensure "Level" is always "Level", even if you boot on a hill
-    // Leveled offset values
-    accelOffsets.xOffset = 0.0350;    //  Towards negative -> Tilt to the right
-    accelOffsets.yOffset = -0.0035;   // Towards negative -> Tilt forward
-    accelOffsets.zOffset = -0.0600;   // MPU readings standard
-    
-    // =================================================================
-    // PID GAINS (12" M2M, 7" props, 1300 KV, ~570 Hz loop)
-    // =================================================================
-    // Lower Kp + higher Kd = less wobble. If sluggish, raise Kp.
-    //
-    // Roll PID
-    rollPID.kp = 6.0;
-    rollPID.ki = 1.5;
-    rollPID.kd = 2.0;
-    //
-    // Pitch PID
-    pitchPID.kp = 9.0;   // main correction
-    pitchPID.ki = 1.0;   // hold level
-    pitchPID.kd = 5.0;   // damping
-
-    // Yaw PID
-    yawPID.kp = 0.15;
-    yawPID.ki = 0.03;
-    yawPID.kd = 0.0;
-
-    // Launch gains (high KP, PD only; for spool-up / early climb)
-    // Pitch slightly stronger to prevent tail dropping back during stage 1
-    rollLaunchKp = 16.0f;
-    rollLaunchKd = 3.3f;
-    pitchLaunchKp = 18.0f;
-    pitchLaunchKd = 4.3f;
-    yawLaunchKp = 3.45f;
-
-    // Throttle ranges: 1 = high KP (launch), 2 = transition, 3 = low KP (flight)
-    // Shorter transition = less time in blend = less stage-2 wobble/vibration
-    throttleIdle = 60;          // below: no corrections
-    throttleLaunchEnd = 1350;   // below: 100% launch gains
-    throttleFlightStart = 1500; // above: 100% flight; blend 1100–1200 (short transition)
+    accelOffsets.xOffset = ACCEL_X_OFFSET;
+    accelOffsets.yOffset = ACCEL_Y_OFFSET;
+    accelOffsets.zOffset = ACCEL_Z_OFFSET;
 
     // =================================================================
-    // OUTPUT LIMITS (12" M2M: room for correction; D provides contention so not too aggressive)
+    // PID GAINS (from build_flags or drone_config_defaults.h)
     // =================================================================
-    maxPDOutput = 300.0;  // higher cap so pitch can pull level when tilted back
-    maxIOutput = 60.0;    // enough for I to hold level
+    rollPID.kp = ROLL_KP;
+    rollPID.ki = ROLL_KI;
+    rollPID.kd = ROLL_KD;
+    pitchPID.kp = PITCH_KP;
+    pitchPID.ki = PITCH_KI;
+    pitchPID.kd = PITCH_KD;
+    yawPID.kp = YAW_KP;
+    yawPID.ki = YAW_KI;
+    yawPID.kd = YAW_KD;
 
-    // =================================================================
-    // TRIM SETTINGS (degrees / deg/s; trim is setpoint offset, not PWM)
-    // =================================================================
-    trimDelay = 250;              // ms between trim steps (debounce)
-    trimStepPitchRollDeg = 0.2f;  // degrees per step (safe, fine adjustment)
-    trimStepYawDegPerSec = 2.0f;  // deg/s per step (yaw rate trim)
+    rollLaunchKp = ROLL_LAUNCH_KP;
+    rollLaunchKd = ROLL_LAUNCH_KD;
+    pitchLaunchKp = PITCH_LAUNCH_KP;
+    pitchLaunchKd = PITCH_LAUNCH_KD;
+    yawLaunchKp = YAW_LAUNCH_KP;
 
-    // =================================================================
-    // FEATURE FLAGS
-    // =================================================================
-    featureFlagEnableAltitudeReading = false;
-    featureFlagEnableDisplay = false;  // set false to disable OLED (no init, no updates)
+    throttleIdle = THROTTLE_IDLE;
+    throttleLaunchEnd = THROTTLE_LAUNCH_END;
+    throttleFlightStart = THROTTLE_FLIGHT_START;
 
-    // =================================================================
-    // RADIO (nRF24L01 pipe address; must match Synapse TX)
-    // =================================================================
+    maxPDOutput = MAX_PD_OUTPUT;
+    maxIOutput = MAX_I_OUTPUT;
+
+    trimDelay = TRIM_DELAY;
+    trimStepPitchRollDeg = TRIM_STEP_PITCH_ROLL_DEG;
+    trimStepYawDegPerSec = TRIM_STEP_YAW_DEG_PER_SEC;
+
+    featureFlagEnableAltitudeReading = (FEATURE_FLAG_ALTITUDE != 0);
+    featureFlagEnableDisplay = (FEATURE_FLAG_DISPLAY != 0);
+
+    // Radio address: hardcoded; must match Synapse TX
     memcpy(radioAddress, "00001", 6);
 }
 

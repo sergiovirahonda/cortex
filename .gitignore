@@ -43,3 +43,6 @@
 # Others
 .pio
 .vscode
+
+# Local config (copy from platformio.ini.example and adjust)
+platformio.ini
