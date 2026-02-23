@@ -64,8 +64,9 @@ build_flags =
     -D TRIM_STEP_YAW_DEG_PER_SEC=2.0f
     -D FEATURE_FLAG_ALTITUDE=0
     -D FEATURE_FLAG_DISPLAY=0
-    ; ----- YAW STICK (deg/s at full stick; higher = snappier, default 120) -----
-    ; -D MAX_YAW_RATE_DPS=150
+    ; ----- YAW (deg/s at full stick; FF in stage 3 for snappier stick response) -----
+    ; -D MAX_YAW_RATE_DPS=120
+    ; -D YAW_FF=1.0f
 
 lib_deps =
     mikalhart/TinyGPSPlus @ ^1.0.3

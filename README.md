@@ -8,14 +8,14 @@ Cortex is the flight control system (FC) for your DIY drone project. It receives
 
 ## Features
 
-* 🚁 **Real-time Stabilization**: PD controllers for roll/pitch, P controller for yaw
+* 🚁 **Real-time Stabilization**: PD controllers for roll/pitch; yaw PI + rate feedforward (stage 3 only) for snappy stick response
 * ⚡ **Native DShot ESC Control**: Direct hardware-level DShot600 protocol via ESP32 RMT
 * 📡 **Wireless Communication**: nRF24L01 radio module for low-latency command reception
 * 🎯 **MPU6050 Integration**: Hardware DLPF filtering and software calibration for accurate attitude sensing
 * 📺 **OLED Telemetry Display**: Real-time flight data on the drone (attitude, throttle, motor outputs, trims)
 * 📤 **Radio Telemetry Downlink**: Sends throttle, roll, and pitch back to the transmitter via nRF24 ACK payload (for Synapse display)
 * 🔒 **Safety Features**: Arming sequence, throttle limits, and hardware initialization checks
-* 🧵 **Dual-Core Design**: Flight loop on core 1 (~1 kHz); avionics task on core 0 samples LIDAR, GPS, compass with cross-core mutex for thread-safe reads
+* 🧵 **Dual-Core Design**: Flight loop on core 1 (~1 kHz, no radio I/O); radio task on core 0 at 1000 Hz (receive + telemetry under mutex); avionics task on core 0 at 100 Hz (LIDAR, GPS, compass) with cross-core mutex for thread-safe reads
 * 📏 **Optional Avionics**: TF-Luna LIDAR, GPS (UART), and compass (I2C) supported; adapters are null-safe so sensors can be omitted per build
 * 🏗️ **Clean Architecture**: Modular design with adapters, models, controllers, and tasks
 * ⚙️ **PlatformIO Integration**: Modern build system with dependency management
@@ -95,7 +95,8 @@ cortex/
 │   │   ├── flight_controller.*     # Throttle stages, mixing matrix, trims, failsafe
 │   │   └── display_controller.*    # OLED output (gated by feature flag)
 │   ├── tasks/
-│   │   └── avionics_task.*         # FreeRTOS task (core 0): LIDAR/GPS/compass, mutex-protected
+│   │   ├── avionics_task.*         # FreeRTOS task (core 0, 100 Hz): LIDAR/GPS/compass, mutex-protected
+│   │   └── radio_task.*            # FreeRTOS task (core 0, 1000 Hz): receive commands, send telemetry under mutex
 │   ├── adapters/
 │   │   ├── radio_adapter.*         # nRF24L01: receive commands, send telemetry (ACK payload)
 │   │   ├── mpu_adapter.*           # MPU6050 sensor interface
@@ -118,26 +119,26 @@ cortex/
 ### Key Components
 
 * **FlightController**: Throttle-band logic (launch / transition / flight), motor mixing matrix, trim updates, failsafe
-* **Attitude**: Sensor state and PID: roll/pitch (PD + I in flight), yaw (P only); launch vs flight gains via blend
+* **Attitude**: Sensor state and PID: roll/pitch (PD + I in flight), yaw (PI in flight; rate feedforward in stage 3 for snappy stick response); launch vs flight gains via blend
 * **DroneConfig**: All tunable constants (PID gains, throttle bands, limits, trim steps, radio address) in one place
-* **RadioAdapter**: nRF24L01 init, receive `DronePacket` (commands), send `TelemetryData` as ACK payload
+* **RadioAdapter**: nRF24L01 init; used only by the **radio task** on core 0 (receive, send telemetry). Core 1 never touches the radio.
 * **MPUAdapter**: MPU6050 interface, calibration, filtering (on I2C bus 1 for minimal interference)
 * **NativeDShotMotorAdapter**: ESP32 RMT-based DShot600 for ESC control
-* **Avionics task**: FreeRTOS task pinned to **core 0**. Samples LIDAR, GPS, and compass at ~100 Hz; updates a global `AvionicsMetrics` struct under a **FreeRTOS mutex**. The main loop on **core 1** calls `getAvionicsMetrics(localAvionics)` for a thread-safe copy. Adapter pointers are null-checked so optional sensors can be omitted.
+* **Radio task**: FreeRTOS task pinned to **core 0** at **1000 Hz**. Polls radio for `DronePacket`; updates a command snapshot under mutex. Sends telemetry (ACK payload) when core 1 has submitted it via `submitTelemetry()` (mutex-protected). Keeps core 1 loop free of SPI/radio I/O for higher loop rate.
+* **Avionics task**: FreeRTOS task pinned to **core 0** at **~100 Hz** (4 KB stack). Samples LIDAR, GPS, and compass; updates `AvionicsMetrics` under a **FreeRTOS mutex**. Core 1 calls `getAvionicsMetrics(localAvionics)` for a thread-safe copy. Adapter pointers are null-checked so optional sensors can be omitted.
 
 ### Control Loop
 
 **Core 1** runs the flight loop at **~1 kHz**:
 
-0. **Thread-safe avionics snapshot**: `getAvionicsMetrics(localAvionics)` (mutex-protected copy of LIDAR/GPS/compass; reserved for future altitude/position/heading use).
-1. **Receive Radio**: Check for new command packet from transmitter
-2. **Update command & send telemetry**: If packet received, load command, remap, then send telemetry (throttle, roll, pitch) back via ACK payload
-3. **Failsafe**: Update failsafe state; override command if link lost
-4. **Read Sensors**: Update MPU6050 attitude (roll, pitch, yaw rates)
-5. **Calculate PID**: Three throttle stages (launch = high Kp, transition = blend, flight = full PID); trim added to setpoint
-6. **Mix Motors**: Apply mixing matrix (throttle + corrections)
-7. **Write Motors**: DShot to all 4 ESCs
-8. **Update Trims**: Process trim buttons from command (debounced)
+0. **Thread-safe snapshots**: `getAvionicsMetrics(localAvionics)` (LIDAR/GPS/compass); `getLatestRadioCommand(packet, lastPacketTime)` (command from core 0 radio task).
+1. **Update command & submit telemetry**: If a new packet was available, load command, remap, then `submitTelemetry(throttle, roll, pitch)` so core 0 can send it via ACK payload (mutex-protected).
+2. **Failsafe**: Update failsafe state; override command if link lost
+3. **Read Sensors**: Update MPU6050 attitude (roll, pitch, yaw rates)
+4. **Calculate PID**: Three throttle stages (launch = high Kp, transition = blend, flight = full PID); trim added to setpoint
+5. **Mix Motors**: Apply mixing matrix (throttle + corrections)
+6. **Write Motors**: DShot to all 4 ESCs
+7. **Update Trims**: Process trim buttons from command (debounced)
 
 The OLED is updated at **~1 Hz** only when throttle is below 300 (idle), to avoid I2C bus contention with the flight loop. Loop frequency, attitude, throttle, motor outputs, and trims are shown.
 
@@ -204,9 +205,12 @@ The radio adapter is configured to match the Synapse transmitter:
 * **Channel**: 108 (above 2.48GHz to avoid WiFi interference)
 * **Auto-ACK**: Enabled with ACK payload (used for telemetry downlink)
 
-### Avionics Task (LIDAR, GPS, Compass)
+### Core 0 tasks (Avionics + Radio)
 
-Optional sensors (TF-Luna LIDAR, GPS module, compass) are sampled on **core 0** in a FreeRTOS task. Before the task starts, `initAvionicsMutex()` is called so the main loop can safely read a snapshot with `getAvionicsMetrics()`. The task only updates adapters that are non-null in `AvionicsParams`, so you can omit a sensor by not wiring it and leaving its pointer null in your build (the default setup assigns all three). Avionics data is currently collected for future use (e.g. altitude hold, position hold).
+Two FreeRTOS tasks run on **core 0**:
+
+* **Avionics task** (4 KB stack, ~100 Hz): Optional sensors (TF-Luna LIDAR, GPS, compass) are sampled here. Call `initAvionicsMutex()` before `startAvionicsTask()`; the main loop reads a snapshot with `getAvionicsMetrics()`. The task only updates adapters that are non-null in `AvionicsParams`. Avionics data is collected for future use (e.g. altitude hold, position hold).
+* **Radio task** (4 KB stack, 1000 Hz): Only this task touches the nRF24L01. It polls for incoming `DronePacket`s and updates a command snapshot (mutex); when core 1 has submitted telemetry via `submitTelemetry()`, the task sends it as ACK payload under mutex. Call `initRadioMutexes()` before `startRadioTask()`. Core 1 gets the latest command with `getLatestRadioCommand()` and never calls the radio directly, which keeps the flight loop fast (~1 kHz).
 
 ### Telemetry (Downlink to Transmitter)
 
@@ -214,34 +218,38 @@ Cortex sends a small telemetry payload back to the transmitter on every received
 
 **Wire format** (`TelemetryPacket` in `src/models/drone_command.h`):
 
-| Field  | Type    | Description                    |
-|--------|---------|--------------------------------|
-| `pwm`  | int16_t | Current throttle (command)     |
-| `roll` | int16_t | Current roll angle (degrees)   |
-| `pitch`| int16_t | Current pitch angle (degrees)  |
+| Field  | Type    | Description                                              |
+|--------|---------|----------------------------------------------------------|
+| `pwm`  | int16_t | Current throttle (command)                              |
+| `roll` | int16_t | Roll angle × 100 (TX: display as `roll / 100.0` degrees) |
+| `pitch`| int16_t | Pitch angle × 100 (TX: display as `pitch / 100.0` degrees) |
+
+Cortex sends roll/pitch scaled by `TELEMETRY_ANGLE_SCALE` (100) for two decimal places; the transmitter (Synapse) should divide by 100.0 when displaying.
 
 **Flow:**
 1. Transmitter (Synapse) sends a `DronePacket` (commands).
-2. Cortex receives it, updates command, then calls `radioAdapter.sendTelemetry(telemetry)`.
-3. The radio sends the telemetry as the ACK payload for pipe 1 (6-byte fixed payload).
-4. Synapse reads the ACK payload and displays throttle, roll, and pitch on the TX screen.
+2. The **radio task** (core 0) receives it and updates the command snapshot under mutex.
+3. Core 1 gets the packet via `getLatestRadioCommand()`, loads command, remaps, then calls `submitTelemetry(throttle, roll, pitch)` (mutex-protected).
+4. The radio task sends that telemetry as the ACK payload for pipe 1 (6-byte fixed payload).
+5. Synapse reads the ACK payload and displays throttle, roll, and pitch on the TX screen.
 
-**Implementation:** When a packet is received (`main.cpp`), the fast loop sets `telemetry.setPwm(command.getThrottle())`, `setRoll(attitude.getRollAngle())`, `setPitch(attitude.getPitchAngle())`, then `radioAdapter.sendTelemetry(telemetry)`. LIDAR, GPS, and compass are sampled in the avionics task but are not currently sent over telemetry (reserved for future use).
+**Implementation:** Only the radio task calls the radio hardware. Core 1 submits telemetry via `submitTelemetry()`; the radio task sends it when the next packet is received (or when pending). LIDAR, GPS, and compass are not currently sent over telemetry (reserved for future use).
 
 ### PID Tuning
 
-All gains and limits are in **`src/config/drone_config.cpp`** (and declared in `drone_config.h`).
+All gains and limits are set via **`platformio.ini` build_flags** (defaults in `src/config/drone_config_defaults.h`). Override in your local `platformio.ini`; see `platformio.ini.example`.
 
-* **Flight stage (stage 3)**: Full PID for roll/pitch (Kp, Ki, Kd), P-only for yaw. Used when throttle is above the flight threshold.
-* **Launch stage (stage 1)**: Higher Kp/Kd for roll/pitch (PD only, no I) for spool-up; separate `rollLaunchKp`, `pitchLaunchKp`, etc.
-* **Transition (stage 2)**: Linear blend of launch and flight gains between two throttle values; I-term can be enabled in the upper part of the band.
+* **Flight stage (stage 3)**: Full PID for roll/pitch (Kp, Ki, Kd). Yaw: **PI** (no D on rate to avoid gyro noise) + **rate feedforward** (`YAW_FF`) for snappy stick response—feedforward is applied only when throttle &gt; flight threshold.
+* **Launch stage (stage 1)**: Higher Kp/Kd for roll/pitch (PD only, no I) for spool-up; separate `rollLaunchKp`, `pitchLaunchKp`, etc. Yaw uses launch Kp only; no feedforward.
+* **Transition (stage 2)**: Linear blend of launch and flight gains; I-term enabled in the upper part of the band.
 
-Throttle band constants: `throttleIdle`, `throttleLaunchEnd`, `throttleFlightStart`. Adjust these and the PID/launch gains to match your frame and props.
+Throttle band constants: `throttleIdle`, `throttleLaunchEnd`, `throttleFlightStart`. Yaw stick scaling: `MAX_YAW_RATE_DPS` (deg/s at full stick). Adjust in `platformio.ini` to match your frame and props.
 
 **Tuning guidelines:**
 * **Kp**: Stiffness. Too low = sluggish, too high = oscillations.
 * **Kd**: Damping. Reduces overshoot; keep Kd &lt; Kp to avoid noise amplification.
 * **Ki**: Removes steady-state error; cap with `maxIOutput` to avoid windup.
+* **Yaw**: `YAW_KP` / `YAW_KI` for containment (holding heading); raising them can cause wobble. `YAW_FF` (e.g. 1.0) in stage 3 for stick response—lower if yaw overshoots when commanding.
 * Tune stage 1 (launch) for stable level at low throttle; stage 3 (flight) for smooth hover and minimal wobble.
 
 ### MPU6050 Calibration
@@ -352,7 +360,7 @@ Trims: P: 0.2 | R: -0.4 | Y: 0
 
 ### Drone Oscillating or Unstable
 
-* **Reduce PID gains**: Lower Kp and Kd values in `src/config/drone_config.cpp`
+* **Reduce PID gains**: Lower Kp and Kd (and YAW_FF if yaw overshoots) in `platformio.ini` build_flags
 * **Increase DLPF**: Adjust hardware filter or increase software filter coefficient
 * **Check motor balance**: Ensure all motors spin smoothly
 * **Verify propellers**: Check for damage or incorrect mounting

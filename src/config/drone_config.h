@@ -37,6 +37,9 @@ class DroneConfig {
         int throttleIdle;
         int throttleLaunchEnd;
         int throttleFlightStart;
+
+        // Yaw rate feedforward (stage 3 only): output += YAW_FF * desiredYawRate for snappier stick response
+        float yawFF;
         
         // Output limits
         float maxPDOutput;
@@ -92,6 +95,8 @@ class DroneConfig {
         int getThrottleIdle() const;
         int getThrottleLaunchEnd() const;
         int getThrottleFlightStart() const;
+
+        float getYawFF() const;
         
         // Output limit getters
         float getMaxPDOutput() const;

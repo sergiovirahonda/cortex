@@ -20,6 +20,7 @@
 #include "controllers/flight_controller.h"
 #include "controllers/display_controller.h"
 #include "tasks/avionics_task.h"
+#include "tasks/radio_task.h"
 #include "config/pins.h"
 
 // =================================================================
@@ -34,9 +35,7 @@ MPU6050 mpu(Wire1);
 // =================================================================
 
 DroneConfig droneConfig;
-DronePacket packet;
 DroneCommand command(0, 0, 0, 0, 0, 0, 0, 0);
-TelemetryData telemetry(0, 0, 0);
 MotorOutput motorOutput;
 Attitude attitude(droneConfig);
 AttitudeTrim attitudeTrim;
@@ -176,13 +175,15 @@ void setup() {
   displayController.println("Resetting PID...");
   attitude.resetPID();
 
-  // D. Init cross-core sync then launch the avionics task
+  // D. Init cross-core sync and launch core 0 tasks
   initAvionicsMutex();
+  initRadioMutexes();
   static AvionicsParams avionicsParams;
   avionicsParams.lidar = &tfLuna;
   avionicsParams.gps = &gps;
   avionicsParams.compass = &compass;
   startAvionicsTask(&avionicsParams, 0);
+  startRadioTask(&radioAdapter, 0);
 }
 
 void loop() {
@@ -208,15 +209,18 @@ void loop() {
   }
   lastLoopTime = now;
   
-  // A. Receive Radio (Check if new packet arrived)
-  bool packetReceived = radioAdapter.receivePacket(packet);
+  // A. Get latest command from radio task (core 0)
+  DronePacket packet;
+  unsigned long lastPacketTime;
+  bool packetReceived = getLatestRadioCommand(packet, lastPacketTime);
   if (packetReceived) {
     command.loadFromPacket(packet);
     command.remap();
-    telemetry.setPwm(command.getThrottle());
-    telemetry.setRoll(attitude.getRollAngle());
-    telemetry.setPitch(attitude.getPitchAngle());
-    radioAdapter.sendTelemetry(telemetry);
+    submitTelemetry(
+      command.getThrottle(),
+      (int16_t)(attitude.getRollAngle() * TELEMETRY_ANGLE_SCALE),
+      (int16_t)(attitude.getPitchAngle() * TELEMETRY_ANGLE_SCALE)
+    );
   }
   
   // Update failsafe state and apply failsafe if needed

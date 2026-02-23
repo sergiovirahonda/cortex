@@ -85,5 +85,11 @@
 #ifndef FEATURE_FLAG_DISPLAY
 #define FEATURE_FLAG_DISPLAY 0
 #endif
+#ifndef MAX_YAW_RATE_DPS
+#define MAX_YAW_RATE_DPS 120
+#endif
+#ifndef YAW_FF
+#define YAW_FF 1.0f
+#endif
 
 #endif
