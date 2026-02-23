@@ -58,7 +58,7 @@ void startAvionicsTask(AvionicsParams* params, int coreID) {
     xTaskCreatePinnedToCore(
         AvionicsLoop,
         "AvionicsTask",
-        10000,
+        4096,
         params,
         1,
         NULL,

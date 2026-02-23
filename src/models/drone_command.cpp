@@ -1,12 +1,10 @@
 #include "drone_command.h"
+#include "config/drone_config_defaults.h"
 #include <Arduino.h>
 
 // =================================================================
-// CONTROL LIMITS CONSTANTS (override via platformio.ini build_flags)
+// CONTROL LIMITS CONSTANTS (MAX_YAW_RATE_DPS from drone_config_defaults.h / build_flags)
 // =================================================================
-#ifndef MAX_YAW_RATE_DPS
-#define MAX_YAW_RATE_DPS 120
-#endif
 const int16_t MAX_ANGLE_DEGREES = 30;   
 const int16_t MIN_THROTTLE_PWM = 50;
 const int16_t MAX_THROTTLE_PWM = 2047;  
@@ -89,7 +87,7 @@ void DroneCommand::remap() {
     int32_t desiredPitchAngle = map(this->pitch, -100, 100, -MAX_ANGLE_DEGREES, MAX_ANGLE_DEGREES);
     int32_t desiredRollAngle = map(this->roll, -100, 100, -MAX_ANGLE_DEGREES, MAX_ANGLE_DEGREES);
 
-    // 3. Yaw: Map -100 to 100 input to Rotation Rate
+    // 3. Yaw: Map -100 to 100 input to rotation rate (deg/s)
     int32_t desiredYawRate = map(this->yaw, -100, 100, (int32_t)MAX_YAW_RATE_DPS, -(int32_t)MAX_YAW_RATE_DPS);
 
     // Update state with the new calculated values

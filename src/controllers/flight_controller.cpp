@@ -129,7 +129,7 @@ void FlightController::computeAttitudeCorrections(
 
     float desiredPitch = (float)command.getPitch() + trim.getPitchTrim();  // degrees
     float desiredRoll  = (float)command.getRoll()  + trim.getRollTrim();   // degrees
-    float desiredYaw   = (float)command.getYaw()  + trim.getYawTrim();     // deg/s
+    float desiredYaw   = (float)command.getYaw()   + trim.getYawTrim();    // deg/s (remap() converts stick to rate)
 
     if (throttle < idle) {
         attitude.resetPID();
@@ -160,6 +160,11 @@ void FlightController::computeAttitudeCorrections(
         rollPD  = attitude.calculateRollPD(desiredRoll, enableI, gainBlend);
         pitchPD = attitude.calculatePitchPD(desiredPitch, enableI, gainBlend);
         yawPD   = attitude.calculateYawPI(desiredYaw, enableI, gainBlend);
+        // Stage 3 only: feedforward for snappier yaw stick response (PI is weak at low Kp)
+        if (throttle > flightStart) {
+            yawPD += droneConfig.getYawFF() * desiredYaw;
+            yawPD = constrain(yawPD, -droneConfig.getMaxPDOutput(), droneConfig.getMaxPDOutput());
+        }
     }
 }
 

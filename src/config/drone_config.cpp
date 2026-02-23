@@ -32,6 +32,8 @@ DroneConfig::DroneConfig() {
     throttleLaunchEnd = THROTTLE_LAUNCH_END;
     throttleFlightStart = THROTTLE_FLIGHT_START;
 
+    yawFF = YAW_FF;
+
     maxPDOutput = MAX_PD_OUTPUT;
     maxIOutput = MAX_I_OUTPUT;
 
@@ -141,6 +143,10 @@ int DroneConfig::getThrottleLaunchEnd() const {
 }
 int DroneConfig::getThrottleFlightStart() const {
     return throttleFlightStart;
+}
+
+float DroneConfig::getYawFF() const {
+    return yawFF;
 }
 
 // Output limit getters

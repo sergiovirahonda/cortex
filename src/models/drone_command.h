@@ -74,10 +74,13 @@ class DroneCommand {
 };
 
 // --- TELEMETRY WIRE FORMAT (6 bytes: pwm, roll, pitch only) ---
+// Roll/pitch are sent as angle_degrees * TELEMETRY_ANGLE_SCALE; TX displays as value/100.0
+const int TELEMETRY_ANGLE_SCALE = 100;
+
 struct TelemetryPacket {
     int16_t pwm;   // Throttle (command)
-    int16_t roll;  // Roll angle (e.g. x100 for degrees)
-    int16_t pitch; // Pitch angle (e.g. x100 for degrees)
+    int16_t roll;  // Roll angle (degrees * TELEMETRY_ANGLE_SCALE)
+    int16_t pitch; // Pitch angle (degrees * TELEMETRY_ANGLE_SCALE)
 } __attribute__((packed));
 
 class TelemetryData {
