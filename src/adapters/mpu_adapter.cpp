@@ -50,3 +50,7 @@ void MPUAdapter::getAttitude(Attitude& attitude) {
         this->mpu->getGyroZ()
     );
 }
+
+void MPUAdapter::getRawAccelGs(Altitude& altitude) {
+    altitude.setCurrentRawAccelerationGs(this->mpu->getAccZ());
+}

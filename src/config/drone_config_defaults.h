@@ -91,5 +91,41 @@
 #ifndef YAW_FF
 #define YAW_FF 1.0f
 #endif
+#ifndef ALT_KP
+    #define ALT_KP 1.5f
+#endif
+#ifndef ALT_KI
+    #define ALT_KI 0.0f
+#endif
+#ifndef ALT_KD
+    #define ALT_KD 0.0f
+#endif
+#ifndef ALT_HOVER_THROTTLE
+    #define ALT_HOVER_THROTTLE 1450
+#endif
+#ifndef ALT_MAX_CORRECTION
+    #define ALT_MAX_CORRECTION 250.0f
+#endif
+#ifndef ALT_FUSION_KP
+    #define ALT_FUSION_KP 2.5f
+#endif
+#ifndef ALT_FUSION_KI
+    #define ALT_FUSION_KI 0.5f
+#endif
+#ifndef ALT_MAX_I_OUTPUT
+    #define ALT_MAX_I_OUTPUT 150.0f
+#endif
+#ifndef ALT_LIDAR_MIN_CM
+    #define ALT_LIDAR_MIN_CM 25.0f
+#endif
+#ifndef ALT_LIDAR_MAX_CM
+    #define ALT_LIDAR_MAX_CM 800.0f
+#endif
+#ifndef ALT_LIDAR_MIN_ENGAGE_CM
+    #define ALT_LIDAR_MIN_ENGAGE_CM 100.0f
+#endif
+#ifndef ALT_LIDAR_MAX_ENGAGE_CM
+    #define ALT_LIDAR_MAX_ENGAGE_CM 700.0f
+#endif
 
 #endif

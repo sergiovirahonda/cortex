@@ -2,6 +2,7 @@
 #define MPU_DRIVER_H
 
 #include "../models/attitude.h"
+#include "../models/altitude.h"
 #include "../config/drone_config.h"
 #include <MPU6050_light.h>
 #include <Wire.h>
@@ -14,6 +15,7 @@ class MPUAdapter{
         void update();
 
         void getAttitude(Attitude& attitude);
+        void getRawAccelGs(Altitude& altitude);
 
     private:
         MPU6050 *mpu;

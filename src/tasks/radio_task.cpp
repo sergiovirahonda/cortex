@@ -36,12 +36,13 @@ bool getLatestRadioCommand(DronePacket& outPacket, unsigned long& outLastPacketT
     return hadNew;
 }
 
-void submitTelemetry(int16_t pwm, int16_t roll, int16_t pitch) {
+void submitTelemetry(int16_t pwm, int16_t roll, int16_t pitch, bool altitudeHoldEngaged) {
     if (telemetryMutex == NULL) return;
     if (xSemaphoreTake(telemetryMutex, portMAX_DELAY) != pdTRUE) return;
     pendingTelemetry.pwm = pwm;
     pendingTelemetry.roll = roll;
     pendingTelemetry.pitch = pitch;
+    pendingTelemetry.altitudeHold = altitudeHoldEngaged ? 1 : 0;
     telemetryHasPending = true;
     xSemaphoreGive(telemetryMutex);
 }
@@ -65,7 +66,12 @@ static void RadioLoop(void* pvParameters) {
         // 2. Send pending telemetry under mutex (core 0 only touches radio)
         if (telemetryMutex != NULL && xSemaphoreTake(telemetryMutex, portMAX_DELAY) == pdTRUE) {
             if (telemetryHasPending) {
-                TelemetryData toSend(pendingTelemetry.pwm, pendingTelemetry.roll, pendingTelemetry.pitch);
+                TelemetryData toSend(
+                    pendingTelemetry.pwm,
+                    pendingTelemetry.roll,
+                    pendingTelemetry.pitch,
+                    pendingTelemetry.altitudeHold
+                );
                 telemetryHasPending = false;
                 xSemaphoreGive(telemetryMutex);
                 radio->sendTelemetry(toSend);

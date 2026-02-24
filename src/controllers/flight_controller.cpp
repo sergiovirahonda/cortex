@@ -1,4 +1,5 @@
 #include "flight_controller.h"
+#include "models/altitude.h"
 #include "models/motor_output.h"
 #include "models/drone_command.h"
 #include "config/drone_config.h"
@@ -17,21 +18,22 @@ static float mapFloat(float x, float inMin, float inMax, float outMin, float out
     return (x - inMin) * (outMax - outMin) / (inMax - inMin) + outMin;
 }
 
-FlightController::FlightController() {
+FlightController::FlightController(const DroneConfig& droneConfig) : config_(droneConfig) {
     lastPacketTime = 0;
     inFailsafe = false;
     failsafeThrottle = FAILSAFE_LANDING_THROTTLE;
     lastTrimTime = 0;
+    lastAltitudeHoldTime = 0;
 }
 
-void FlightController::updateTrims(DroneCommand& command, AttitudeTrim& attitudeTrim, const DroneConfig& droneConfig) {
-    if (millis() - lastTrimTime <= (unsigned long)droneConfig.getTrimDelay()) {
+void FlightController::updateTrims(DroneCommand& command, AttitudeTrim& attitudeTrim) {
+    if (millis() - lastTrimTime <= (unsigned long)config_.getTrimDelay()) {
         return;
     }
     lastTrimTime = millis();
 
-    float stepDeg = droneConfig.getTrimStepPitchRollDeg();   // degrees (pitch, roll)
-    float stepYaw = droneConfig.getTrimStepYawDegPerSec();  // deg/s (yaw)
+    float stepDeg = config_.getTrimStepPitchRollDeg();   // degrees (pitch, roll)
+    float stepYaw = config_.getTrimStepYawDegPerSec();  // deg/s (yaw)
 
     // Pitch: negative = nose down (subtract from trim), positive = nose up (add to trim).
     int16_t pt = command.getPitchTrim();
@@ -60,6 +62,70 @@ void FlightController::updateTrims(DroneCommand& command, AttitudeTrim& attitude
     if (command.getTrimReset() != 0) {
         attitudeTrim.reset();
     }
+}
+
+void FlightController::updateAltitudeHolding(
+    DroneCommand& command,
+    Altitude& altitude,
+    AltitudeHold& altitudeHold
+) {
+    // Failsafe disengage is handled in lockAltitude(); here we only handle pilot command (1 = engage, -1 = disengage).
+
+    if (command.getAltitudeHold() == 0 ) {
+        return;
+    }
+
+    if (command.getAltitudeHold() == 1 && !altitudeHold.getAltitudeHoldEngaged()) {
+        // Min height to engage (e.g. 1 m) so we have stable flight before hold; separate from LiDAR range.
+        if (altitude.getCurrentAltitudeCm() < config_.getAltitudeLidarMinEngageCm()) {
+            return;
+        }
+        // Max height: don't engage too high (e.g. above 7 m)
+        if (altitude.getCurrentAltitudeCm() > config_.getAltitudeLidarMaxEngageCm()) {
+            return;
+        }
+        // Throttle: must be in flight range
+        if (command.getThrottle() < config_.getThrottleFlightStart()) {
+            return;
+        }
+        altitudeHold.setAltitudeHoldEngaged(true);
+        altitudeHold.setTargetAltitudeCm(altitude.getCurrentAltitudeCm());
+    }
+
+    if (command.getAltitudeHold() == -1 && altitudeHold.getAltitudeHoldEngaged()) {
+        altitudeHold.reset();
+        altitude.resetPID();  // Clear I-term only; keep fused altitude/velocity so re-engage has a sane estimate
+    }
+}
+
+void FlightController::lockAltitude(
+    DroneCommand& command,
+    Altitude& altitude,
+    AltitudeHold& altitudeHold
+) {
+    if (!altitudeHold.getAltitudeHoldEngaged()) {
+        return;
+    }
+    // If the radio is dead, immediately disengage AltHold so the failsafe landing can happen
+    if (this->isInFailsafe()) {
+        altitudeHold.reset();
+        altitude.resetPID();
+        return; 
+    }
+    // Notice: We completely ignore the user's physical throttle stick here.
+    float targetAlt = altitudeHold.getTargetAltitudeCm();
+
+    // Run the altitude PID to get the correction
+    float correction = altitude.calculateAltitudePID(targetAlt);
+
+    // Apply the correction to the throttle
+    float throttle = config_.getAltitudeHoverThrottle() + correction;
+    command.setThrottle(throttle); // Command override 1: Pure hover + PID
+
+    // Command override 2: Zero pitch and roll (level attitude)
+    command.setPitch(0);
+    command.setRoll(0);
+    command.setYaw(0);
 }
 
 void FlightController::updateFailsafe(bool packetReceived, int16_t currentThrottle) {
@@ -114,7 +180,6 @@ void FlightController::applyFailsafe(DroneCommand& command) {
 // Three throttle ranges: 1 = high KP (launch), 2 = transition (blend), 3 = low KP (flight, I on).
 // Trim is in degrees/deg/s and added to setpoint so I-term does not fight trim.
 void FlightController::computeAttitudeCorrections(
-    const DroneConfig& droneConfig,
     DroneCommand& command,
     Attitude& attitude,
     AttitudeTrim& trim,
@@ -123,9 +188,9 @@ void FlightController::computeAttitudeCorrections(
     float& yawPD
 ) {
     int16_t throttle = command.getThrottle();
-    int16_t idle = droneConfig.getThrottleIdle();
-    int16_t launchEnd = droneConfig.getThrottleLaunchEnd();
-    int16_t flightStart = droneConfig.getThrottleFlightStart();
+    int16_t idle = config_.getThrottleIdle();
+    int16_t launchEnd = config_.getThrottleLaunchEnd();
+    int16_t flightStart = config_.getThrottleFlightStart();
 
     float desiredPitch = (float)command.getPitch() + trim.getPitchTrim();  // degrees
     float desiredRoll  = (float)command.getRoll()  + trim.getRollTrim();   // degrees
@@ -162,8 +227,8 @@ void FlightController::computeAttitudeCorrections(
         yawPD   = attitude.calculateYawPI(desiredYaw, enableI, gainBlend);
         // Stage 3 only: feedforward for snappier yaw stick response (PI is weak at low Kp)
         if (throttle > flightStart) {
-            yawPD += droneConfig.getYawFF() * desiredYaw;
-            yawPD = constrain(yawPD, -droneConfig.getMaxPDOutput(), droneConfig.getMaxPDOutput());
+            yawPD += config_.getYawFF() * desiredYaw;
+            yawPD = constrain(yawPD, -config_.getMaxPDOutput(), config_.getMaxPDOutput());
         }
     }
 }

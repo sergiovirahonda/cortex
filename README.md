@@ -13,7 +13,8 @@ Cortex is the flight control system (FC) for your DIY drone project. It receives
 * 📡 **Wireless Communication**: nRF24L01 radio module for low-latency command reception
 * 🎯 **MPU6050 Integration**: Hardware DLPF filtering and software calibration for accurate attitude sensing
 * 📺 **OLED Telemetry Display**: Real-time flight data on the drone (attitude, throttle, motor outputs, trims)
-* 📤 **Radio Telemetry Downlink**: Sends throttle, roll, and pitch back to the transmitter via nRF24 ACK payload (for Synapse display)
+* 📤 **Radio Telemetry Downlink**: Sends throttle, roll, pitch, and altitude-hold state (7-byte packet) to the transmitter via nRF24 ACK payload (for Synapse display)
+* 📐 **Altitude Hold**: LiDAR + accelerometer fusion for vertical state; PID hold with engage (1) / no-op (0) / disengage (-1) from transmitter; failsafe auto-disengages; configurable min/max engage altitude and LiDAR valid range
 * 🔒 **Safety Features**: Arming sequence, throttle limits, and hardware initialization checks
 * 🧵 **Dual-Core Design**: Flight loop on core 1 (~1 kHz, no radio I/O); radio task on core 0 at 1000 Hz (receive + telemetry under mutex); avionics task on core 0 at 100 Hz (LIDAR, GPS, compass) with cross-core mutex for thread-safe reads
 * 📏 **Optional Avionics**: TF-Luna LIDAR, GPS (UART), and compass (I2C) supported; adapters are null-safe so sensors can be omitted per build
@@ -92,7 +93,7 @@ cortex/
 │   │   ├── drone_config.*          # PID gains, throttle bands, limits, trim, radio address
 │   │   └── pins.h                  # GPIO and bus definitions
 │   ├── controllers/
-│   │   ├── flight_controller.*     # Throttle stages, mixing matrix, trims, failsafe
+│   │   ├── flight_controller.*     # Throttle stages, mixing matrix, trims, failsafe, altitude hold (engage/lock)
 │   │   └── display_controller.*    # OLED output (gated by feature flag)
 │   ├── tasks/
 │   │   ├── avionics_task.*         # FreeRTOS task (core 0, 100 Hz): LIDAR/GPS/compass, mutex-protected
@@ -108,19 +109,21 @@ cortex/
 │   │   └── bmp280_adapter.*        # BME280 barometer (optional, feature-flagged)
 │   └── models/
 │       ├── attitude.*              # Attitude state & PID (roll/pitch/yaw)
-│       ├── drone_command.*        # DronePacket (commands), TelemetryData (downlink)
+│       ├── altitude.*              # Altitude state (LiDAR+accel fusion), AltitudeHold (engage/target), altitude PID
+│       ├── drone_command.*         # DronePacket (commands, incl. altitude hold int8_t: -1/0/1), TelemetryData (downlink)
 │       ├── motor_output.*          # Motor speed outputs
 │       ├── avionics_params.h       # Adapter pointers for avionics task
-│       ├── avionics_metrics.h       # LidarReadings, GpsReadings, CompassReadings
+│       ├── avionics_metrics.h      # LidarReadings, GpsReadings, CompassReadings
 │       └── ...
 └── platformio.ini                  # Build configuration
 ```
 
 ### Key Components
 
-* **FlightController**: Throttle-band logic (launch / transition / flight), motor mixing matrix, trim updates, failsafe
+* **FlightController**: Throttle-band logic (launch / transition / flight), motor mixing matrix, trim updates, failsafe, altitude hold (engage/disengage and lock). Takes `DroneConfig` at construction; no config passed in method calls.
 * **Attitude**: Sensor state and PID: roll/pitch (PD + I in flight), yaw (PI in flight; rate feedforward in stage 3 for snappy stick response); launch vs flight gains via blend
-* **DroneConfig**: All tunable constants (PID gains, throttle bands, limits, trim steps, radio address) in one place
+* **Altitude / AltitudeHold**: Vertical state from LiDAR + accelerometer fusion (complementary filter); altitude PID for hold; engage (1) / no-op (0) / disengage (-1) from command; LiDAR range sanity checks; disengage only clears PID state (keeps estimate for re-engage)
+* **DroneConfig**: All tunable constants (PID gains, throttle bands, limits, trim steps, altitude hold gains and LiDAR limits, radio address) in one place
 * **RadioAdapter**: nRF24L01 init; used only by the **radio task** on core 0 (receive, send telemetry). Core 1 never touches the radio.
 * **MPUAdapter**: MPU6050 interface, calibration, filtering (on I2C bus 1 for minimal interference)
 * **NativeDShotMotorAdapter**: ESP32 RMT-based DShot600 for ESC control
@@ -132,13 +135,14 @@ cortex/
 **Core 1** runs the flight loop at **~1 kHz**:
 
 0. **Thread-safe snapshots**: `getAvionicsMetrics(localAvionics)` (LIDAR/GPS/compass); `getLatestRadioCommand(packet, lastPacketTime)` (command from core 0 radio task).
-1. **Update command & submit telemetry**: If a new packet was available, load command, remap, then `submitTelemetry(throttle, roll, pitch)` so core 0 can send it via ACK payload (mutex-protected).
-2. **Failsafe**: Update failsafe state; override command if link lost
-3. **Read Sensors**: Update MPU6050 attitude (roll, pitch, yaw rates)
-4. **Calculate PID**: Three throttle stages (launch = high Kp, transition = blend, flight = full PID); trim added to setpoint
-5. **Mix Motors**: Apply mixing matrix (throttle + corrections)
-6. **Write Motors**: DShot to all 4 ESCs
-7. **Update Trims**: Process trim buttons from command (debounced)
+1. **Update command & submit telemetry**: If a new packet was available, load command, remap, then `submitTelemetry(throttle, roll, pitch, altitudeHoldEngaged)` so core 0 can send it via ACK payload (mutex-protected).
+2. **Failsafe**: Update failsafe state; override command if link lost.
+3. **Read Sensors**: Update MPU6050 attitude; feed raw accel Z to altitude; run altitude fusion (LiDAR + accel, with LiDAR range checks).
+4. **Altitude hold**: `updateAltitudeHolding()` first (engage on 1, disengage on -1; min/max engage altitude and throttle checks), then `lockAltitude()` (if engaged, override throttle/pitch/roll with hold PID and level attitude; if failsafe, disengage hold). Order ensures engage/disengage take effect the same frame.
+5. **Calculate PID**: Three throttle stages (launch = high Kp, transition = blend, flight = full PID); trim added to setpoint.
+6. **Mix Motors**: Apply mixing matrix (throttle + corrections).
+7. **Write Motors**: DShot to all 4 ESCs.
+8. **Update Trims**: Process trim buttons from command (debounced).
 
 The OLED is updated at **~1 Hz** only when throttle is below 300 (idle), to avoid I2C bus contention with the flight loop. Loop frequency, attitude, throttle, motor outputs, and trims are shown.
 
@@ -216,24 +220,25 @@ Two FreeRTOS tasks run on **core 0**:
 
 Cortex sends a small telemetry payload back to the transmitter on every received command packet, using the nRF24 **ACK payload** (no extra round-trip).
 
-**Wire format** (`TelemetryPacket` in `src/models/drone_command.h`):
+**Wire format** (`TelemetryPacket` in `src/models/drone_command.h`, 7 bytes packed):
 
-| Field  | Type    | Description                                              |
-|--------|---------|----------------------------------------------------------|
-| `pwm`  | int16_t | Current throttle (command)                              |
-| `roll` | int16_t | Roll angle × 100 (TX: display as `roll / 100.0` degrees) |
-| `pitch`| int16_t | Pitch angle × 100 (TX: display as `pitch / 100.0` degrees) |
+| Field          | Type    | Description                                                              |
+|----------------|---------|--------------------------------------------------------------------------|
+| `pwm`          | int16_t | Current throttle (command)                                              |
+| `roll`         | int16_t | Roll angle × 100 (TX: display as `roll / 100.0` degrees)                 |
+| `pitch`        | int16_t | Pitch angle × 100 (TX: display as `pitch / 100.0` degrees)               |
+| `altitudeHold` | uint8_t | 1 = altitude hold engaged, 0 = not (so operator sees lock state on TX)   |
 
 Cortex sends roll/pitch scaled by `TELEMETRY_ANGLE_SCALE` (100) for two decimal places; the transmitter (Synapse) should divide by 100.0 when displaying.
 
 **Flow:**
 1. Transmitter (Synapse) sends a `DronePacket` (commands).
 2. The **radio task** (core 0) receives it and updates the command snapshot under mutex.
-3. Core 1 gets the packet via `getLatestRadioCommand()`, loads command, remaps, then calls `submitTelemetry(throttle, roll, pitch)` (mutex-protected).
-4. The radio task sends that telemetry as the ACK payload for pipe 1 (6-byte fixed payload).
-5. Synapse reads the ACK payload and displays throttle, roll, and pitch on the TX screen.
+3. Core 1 gets the packet via `getLatestRadioCommand()`, loads command, remaps, then calls `submitTelemetry(throttle, roll, pitch, altitudeHoldEngaged)` (mutex-protected).
+4. The radio task sends that telemetry as the ACK payload for pipe 1 (7-byte packed `TelemetryPacket`).
+5. Synapse reads the ACK payload and displays throttle, roll, pitch, and altitude hold state (e.g. "AltHold: ON" / "off") on the TX screen.
 
-**Implementation:** Only the radio task calls the radio hardware. Core 1 submits telemetry via `submitTelemetry()`; the radio task sends it when the next packet is received (or when pending). LIDAR, GPS, and compass are not currently sent over telemetry (reserved for future use).
+**Implementation:** Only the radio task calls the radio hardware. Core 1 submits telemetry via `submitTelemetry()`; the radio task sends it when the next packet is received (or when pending). LIDAR, GPS, and compass are not sent over telemetry (used onboard for altitude hold and future features).
 
 ### PID Tuning
 
@@ -243,7 +248,11 @@ All gains and limits are set via **`platformio.ini` build_flags** (defaults in `
 * **Launch stage (stage 1)**: Higher Kp/Kd for roll/pitch (PD only, no I) for spool-up; separate `rollLaunchKp`, `pitchLaunchKp`, etc. Yaw uses launch Kp only; no feedforward.
 * **Transition (stage 2)**: Linear blend of launch and flight gains; I-term enabled in the upper part of the band.
 
-Throttle band constants: `throttleIdle`, `throttleLaunchEnd`, `throttleFlightStart`. Yaw stick scaling: `MAX_YAW_RATE_DPS` (deg/s at full stick). Adjust in `platformio.ini` to match your frame and props.
+Throttle band constants: `throttleIdle`, `throttleLaunchEnd`, `throttleFlightStart`. Yaw stick scaling: `MAX_YAW_RATE_DPS` (deg/s at full stick).
+
+**Altitude hold** (LiDAR-based): `ALT_KP`, `ALT_KI`, `ALT_KD` (altitude PID); `ALT_HOVER_THROTTLE`, `ALT_MAX_CORRECTION`, `ALT_MAX_I_OUTPUT`; `ALT_FUSION_KP`, `ALT_FUSION_KI` (LiDAR+accel fusion); `ALT_LIDAR_MIN_CM`, `ALT_LIDAR_MAX_CM` (valid LiDAR range for fusion); `ALT_LIDAR_MIN_ENGAGE_CM`, `ALT_LIDAR_MAX_ENGAGE_CM` (min/max altitude to allow engaging hold). Engage requires throttle ≥ flight start and altitude in the engage band. Disengage on command (-1) or failsafe. Tune in `platformio.ini` to match your frame (e.g. 12" M2M, ~920 g: start with Kp ~1.5, add small Ki/Kd for drift and damping). (Note: `FEATURE_FLAG_ALTITUDE` is for BMP280 barometer reading, not for this LiDAR altitude hold.)
+
+Adjust all of the above in `platformio.ini` to match your frame and props.
 
 **Tuning guidelines:**
 * **Kp**: Stiffness. Too low = sluggish, too high = oscillations.
@@ -399,10 +408,16 @@ pio device monitor
 
 ### Adding Features
 
-* **Altitude Hold**: BME280 adapter exists (feature-flagged); add altitude PID loop
-* **GPS / LIDAR / Compass on Telemetry**: Avionics task already samples these; add fields to `TelemetryPacket` and Synapse display (keep packet ≤ 16 bytes for fixed payload), or use onboard only (e.g. altitude hold, position hold)
-* **Telemetry Downlink**: Implemented (throttle, roll, pitch via ACK payload; 6-byte fixed packet)
+* **Altitude Hold**: Implemented. LiDAR + accel fusion, altitude PID, engage (1) / no-op (0) / disengage (-1) via `DronePacket.altitudeHold` (int8_t). Failsafe disengages hold. Telemetry includes altitude-hold state (7-byte packet). See build flags `ALT_*` and `ALT_LIDAR_*`.
+* **GPS / LIDAR / Compass on Telemetry**: Avionics task samples these onboard; LIDAR is used for altitude hold. To send more over telemetry, add fields to `TelemetryPacket` and Synapse display (keep packet ≤ 16 bytes for fixed payload).
+* **Telemetry Downlink**: Implemented (throttle, roll, pitch, altitude hold via ACK payload; 7-byte packed `TelemetryPacket`).
 * **LED Indicators**: Add status LEDs for visual feedback
+
+### Planned (upcoming iterations)
+
+* **Yaw lock via compass**: Hold heading using compass heading when engaged.
+* **Position lock**: Altitude lock (current) plus geo position lock (hold latitude/longitude using GPS).
+* **Auto-landing**: Automated descent and landing sequence.
 
 ## Related Projects
 

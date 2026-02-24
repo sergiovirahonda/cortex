@@ -17,7 +17,8 @@ DroneCommand::DroneCommand(
     int16_t rollTrim,
     int16_t pitchTrim,
     int16_t yawTrim,
-    uint8_t trimReset
+    uint8_t trimReset,
+    int8_t altitudeHold
 ) {
     this->pitch = pitch;
     this->roll = roll;
@@ -27,6 +28,7 @@ DroneCommand::DroneCommand(
     this->pitchTrim = pitchTrim;
     this->yawTrim = yawTrim;
     this->trimReset = trimReset;
+    this->altitudeHold = altitudeHold;
 };
 
 // --- SETTERS ---
@@ -38,6 +40,7 @@ void DroneCommand::setRollTrim(int16_t rollTrim) { this->rollTrim = rollTrim; }
 void DroneCommand::setPitchTrim(int16_t pitchTrim) { this->pitchTrim = pitchTrim; }
 void DroneCommand::setYawTrim(int16_t yawTrim) { this->yawTrim = yawTrim; }
 void DroneCommand::setTrimReset(uint8_t trimReset) { this->trimReset = trimReset; }
+void DroneCommand::setAltitudeHold(int8_t altitudeHold) { this->altitudeHold = altitudeHold; }
 void DroneCommand::reset() {
     pitch = 0; roll = 0; yaw = 0; throttle = 0;
     rollTrim = 0; pitchTrim = 0; yawTrim = 0;
@@ -52,6 +55,7 @@ int16_t DroneCommand::getRollTrim() { return this->rollTrim; }
 int16_t DroneCommand::getPitchTrim() { return this->pitchTrim; }
 int16_t DroneCommand::getYawTrim() { return this->yawTrim; }
 uint8_t DroneCommand::getTrimReset() { return this->trimReset; }
+int8_t DroneCommand::getAltitudeHold() { return this->altitudeHold; }
 
 // --- RADIO HELPERS (The Bridge) ---
 DronePacket DroneCommand::createPacket() {
@@ -64,6 +68,7 @@ DronePacket DroneCommand::createPacket() {
     pkt.pitchTrim = this->pitchTrim;
     pkt.yawTrim = this->yawTrim;
     pkt.trimReset = this->trimReset;
+    pkt.altitudeHold = this->altitudeHold;
     return pkt;
 }
 
@@ -76,6 +81,7 @@ void DroneCommand::loadFromPacket(DronePacket pkt) {
     this->pitchTrim = pkt.pitchTrim;
     this->yawTrim = pkt.yawTrim;
     this->trimReset = pkt.trimReset;
+    this->altitudeHold = pkt.altitudeHold;
 }
 
 // --- LOGIC ---
@@ -101,24 +107,28 @@ void DroneCommand::remap() {
 // TelemetryData
 // =================================================================
 
-TelemetryData::TelemetryData(int16_t pwm, int16_t roll, int16_t pitch) {
+TelemetryData::TelemetryData(int16_t pwm, int16_t roll, int16_t pitch, uint8_t altitudeHold) {
     this->pwm = pwm;
     this->roll = roll;
     this->pitch = pitch;
+    this->altitudeHold = altitudeHold;
 }
 
 int16_t TelemetryData::getPwm()   { return this->pwm; }
 int16_t TelemetryData::getRoll()  { return this->roll; }
 int16_t TelemetryData::getPitch() { return this->pitch; }
+uint8_t TelemetryData::getAltitudeHold() { return this->altitudeHold; }
 
 void TelemetryData::setPwm(int16_t pwm)     { this->pwm = pwm; }
 void TelemetryData::setRoll(int16_t roll)   { this->roll = roll; }
 void TelemetryData::setPitch(int16_t pitch) { this->pitch = pitch; }
+void TelemetryData::setAltitudeHold(uint8_t altitudeHold) { this->altitudeHold = altitudeHold; }
 
 void TelemetryData::reset() {
     pwm = 0;
     roll = 0;
     pitch = 0;
+    altitudeHold = 0;
 }
 
 TelemetryPacket TelemetryData::createPacket() {
@@ -126,6 +136,7 @@ TelemetryPacket TelemetryData::createPacket() {
     pkt.pwm = this->pwm;
     pkt.roll = this->roll;
     pkt.pitch = this->pitch;
+    pkt.altitudeHold = this->altitudeHold;
     return pkt;
 }
 
@@ -133,4 +144,5 @@ void TelemetryData::loadFromPacket(TelemetryPacket pkt) {
     this->pwm = pkt.pwm;
     this->roll = pkt.roll;
     this->pitch = pkt.pitch;
+    this->altitudeHold = pkt.altitudeHold;
 }
