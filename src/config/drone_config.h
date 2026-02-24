@@ -50,6 +50,20 @@ class DroneConfig {
         float trimStepPitchRollDeg;  // degrees per step (pitch, roll)
         float trimStepYawDegPerSec;  // deg/s per step (yaw)
     
+        // Altitude hold (LIDAR): PID gains and hover throttle (gravity cancellation guess)
+        float altitudeKp;
+        float altitudeKi;
+        float altitudeKd;
+        float altitudeHoverThrottle;
+        float altitudeMaxCorrection;
+        float altitudeFusionKp;
+        float altitudeFusionKi;
+        float altitudeMaxIOutput;
+        float altitudeLidarMinCm;
+        float altitudeLidarMaxCm;
+        float altitudeLidarMinEngageCm;  // min altitude (cm) to allow engaging hold (e.g. 1 m for stable flight)
+        float altitudeLidarMaxEngageCm;  // max altitude (cm) at which we allow engaging hold
+    
         // Feature flags
         bool featureFlagEnableAltitudeReading;
         bool featureFlagEnableDisplay;
@@ -97,7 +111,7 @@ class DroneConfig {
         int getThrottleFlightStart() const;
 
         float getYawFF() const;
-        
+
         // Output limit getters
         float getMaxPDOutput() const;
         float getMaxIOutput() const;
@@ -106,6 +120,20 @@ class DroneConfig {
         int getTrimDelay() const;
         float getTrimStepPitchRollDeg() const;
         float getTrimStepYawDegPerSec() const;
+    
+         // Altitude hold getters
+         float getAltitudeKp() const;
+         float getAltitudeKi() const;
+         float getAltitudeKd() const;
+         int getAltitudeHoverThrottle() const;
+         float getAltitudeMaxCorrection() const;
+         float getAltitudeFusionKp() const;
+         float getAltitudeFusionKi() const;
+         float getAltitudeMaxIOutput() const;
+         float getAltitudeLidarMinCm() const;
+         float getAltitudeLidarMaxCm() const;
+         float getAltitudeLidarMinEngageCm() const;
+         float getAltitudeLidarMaxEngageCm() const;
     
         // Feature flags getters
         bool getFeatureFlagEnableAltitudeReading() const;

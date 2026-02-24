@@ -13,7 +13,7 @@ void initRadioMutexes();
 bool getLatestRadioCommand(DronePacket& outPacket, unsigned long& outLastPacketTime);
 
 // Core 1: submit telemetry to be sent by core 0 (mutex-protected).
-void submitTelemetry(int16_t pwm, int16_t roll, int16_t pitch);
+void submitTelemetry(int16_t pwm, int16_t roll, int16_t pitch, bool altitudeHoldEngaged);
 
 // Start the radio task on the given core (e.g. 0). Runs at 1000 Hz.
 void startRadioTask(RadioAdapter* radio, int coreID);

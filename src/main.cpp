@@ -7,6 +7,7 @@
 // Internal imports
 #include "config/drone_config.h"
 #include "models/attitude.h"
+#include "models/altitude.h"
 #include "models/motor_output.h"
 #include "models/drone_command.h"
 #include "adapters/radio_adapter.h"
@@ -35,10 +36,12 @@ MPU6050 mpu(Wire1);
 // =================================================================
 
 DroneConfig droneConfig;
-DroneCommand command(0, 0, 0, 0, 0, 0, 0, 0);
+DroneCommand command(0, 0, 0, 0, 0, 0, 0, 0, 0);
 MotorOutput motorOutput;
 Attitude attitude(droneConfig);
+Altitude altitude(droneConfig);
 AttitudeTrim attitudeTrim;
+AltitudeHold altitudeHold;
 RadioAdapter radioAdapter(
     RADIO_CE_PIN,
     RADIO_CSN_PIN,
@@ -46,7 +49,7 @@ RadioAdapter radioAdapter(
 );
 MPUAdapter mpuAdapter(&mpu);
 BME280Adapter bme280Adapter(&Wire);
-FlightController flightController;
+FlightController flightController(droneConfig);
 NativeDShotMotorAdapter esc1, esc2, esc3, esc4;
 DisplayAdapter displayAdapter(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RST, OLED_ADDR);
 HardwareSerial TFLunaSerial(1);
@@ -219,7 +222,8 @@ void loop() {
     submitTelemetry(
       command.getThrottle(),
       (int16_t)(attitude.getRollAngle() * TELEMETRY_ANGLE_SCALE),
-      (int16_t)(attitude.getPitchAngle() * TELEMETRY_ANGLE_SCALE)
+      (int16_t)(attitude.getPitchAngle() * TELEMETRY_ANGLE_SCALE),
+      altitudeHold.getAltitudeHoldEngaged()
     );
   }
   
@@ -230,24 +234,34 @@ void loop() {
 
   // B. Read Sensors
   mpuAdapter.getAttitude(attitude);
+  mpuAdapter.getRawAccelGs(altitude);
+  altitude.updateSensors(
+    attitude.getPitchAngle(),
+    attitude.getRollAngle(),
+    localAvionics.lidar.getDistanceCm()
+  );
 
-  // C. Calculate PID
+  // C. Update altitude holding and lock altitude
+  flightController.updateAltitudeHolding(command, altitude, altitudeHold);
+  flightController.lockAltitude(command, altitude, altitudeHold);
+
+  // D. Calculate PID
 
   float pitchPD, rollPD, yawPD;
 
-  flightController.computeAttitudeCorrections(droneConfig, command, attitude, attitudeTrim, pitchPD, rollPD, yawPD);
+  flightController.computeAttitudeCorrections(command, attitude, attitudeTrim, pitchPD, rollPD, yawPD);
 
-  // D. Mix Motors
+  // E. Mix Motors
   flightController.computeMotorOutput(motorOutput, command, attitudeTrim, rollPD, pitchPD, yawPD);
 
-  // E. WRITE TO MOTORS
+  // F. WRITE TO MOTORS
   esc1.sendThrottle(motorOutput.getMotor1Speed());
   esc2.sendThrottle(motorOutput.getMotor2Speed());
   esc3.sendThrottle(motorOutput.getMotor3Speed());
   esc4.sendThrottle(motorOutput.getMotor4Speed());
 
   // Update trims from command (debounced inside FlightController)
-  flightController.updateTrims(command, attitudeTrim, droneConfig);
+  flightController.updateTrims(command, attitudeTrim);
 
   // ================================================================
   // 2. DISPLAY LOOP (HUMAN INTERFACE) - Ground Only!

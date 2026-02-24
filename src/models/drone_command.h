@@ -18,6 +18,8 @@ struct DronePacket {
     int16_t pitchTrim;
     int16_t yawTrim;
     uint8_t trimReset;
+    // Altitude hold: -1 = disable, 0 = normal, 1 = enable (int8_t so -1 is native on wire)
+    int8_t altitudeHold;
 } __attribute__((packed));
 
 class DroneCommand {
@@ -28,6 +30,8 @@ class DroneCommand {
         // Drone trim commands
         int16_t rollTrim, pitchTrim, yawTrim;
         uint8_t trimReset;
+        // Altitude hold commands: -1 = disengage, 0 = no op, 1 = engage
+        int8_t altitudeHold;
 
     public:
         DroneCommand(
@@ -38,7 +42,8 @@ class DroneCommand {
             int16_t rollTrim,
             int16_t pitchTrim,
             int16_t yawTrim,
-            uint8_t trimReset
+            uint8_t trimReset,
+            int8_t altitudeHold
         );
 
         // Getters - Control Commands
@@ -53,6 +58,9 @@ class DroneCommand {
         int16_t getYawTrim();
         uint8_t getTrimReset();
 
+        // Getters - Altitude Hold Commands
+        int8_t getAltitudeHold();
+
         // Setters - Control Commands
         void setPitch(int16_t pitch);
         void setRoll(int16_t roll);
@@ -64,6 +72,10 @@ class DroneCommand {
         void setPitchTrim(int16_t pitchTrim);
         void setYawTrim(int16_t yawTrim);
         void setTrimReset(uint8_t trimReset);
+
+        // Setters - Altitude Hold Commands
+        void setAltitudeHold(int8_t altitudeHold);
+
         // Helpers
         void reset();
         void remap();
@@ -73,7 +85,7 @@ class DroneCommand {
         void loadFromPacket(DronePacket packet);
 };
 
-// --- TELEMETRY WIRE FORMAT (6 bytes: pwm, roll, pitch only) ---
+// --- TELEMETRY WIRE FORMAT (7 bytes: pwm, roll, pitch, altitudeHold) ---
 // Roll/pitch are sent as angle_degrees * TELEMETRY_ANGLE_SCALE; TX displays as value/100.0
 const int TELEMETRY_ANGLE_SCALE = 100;
 
@@ -81,6 +93,7 @@ struct TelemetryPacket {
     int16_t pwm;   // Throttle (command)
     int16_t roll;  // Roll angle (degrees * TELEMETRY_ANGLE_SCALE)
     int16_t pitch; // Pitch angle (degrees * TELEMETRY_ANGLE_SCALE)
+    uint8_t altitudeHold; // 1 = altitude hold engaged, 0 = not
 } __attribute__((packed));
 
 class TelemetryData {
@@ -88,17 +101,20 @@ private:
     int16_t pwm;
     int16_t roll;
     int16_t pitch;
+    uint8_t altitudeHold;
 
 public:
-    TelemetryData(int16_t pwm, int16_t roll, int16_t pitch);
+    TelemetryData(int16_t pwm, int16_t roll, int16_t pitch, uint8_t altitudeHold = 0);
 
     int16_t getPwm();
     int16_t getRoll();
     int16_t getPitch();
+    uint8_t getAltitudeHold();
 
     void setPwm(int16_t pwm);
     void setRoll(int16_t roll);
     void setPitch(int16_t pitch);
+    void setAltitudeHold(uint8_t altitudeHold);
 
     void reset();
 

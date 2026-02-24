@@ -67,6 +67,19 @@ build_flags =
     ; ----- YAW (deg/s at full stick; FF in stage 3 for snappier stick response) -----
     ; -D MAX_YAW_RATE_DPS=120
     ; -D YAW_FF=1.0f
+    ; ----- Altitude hold settings
+    -D ALT_KP=1.5f
+    -D ALT_KI=0.04f
+    -D ALT_KD=0.5f
+    -D ALT_MAX_CORRECTION=250.0f
+    -D ALT_HOVER_THROTTLE=1500
+    -D ALT_FUSION_KP=2.5f
+    -D ALT_FUSION_KI=0.5f
+    -D ALT_MAX_I_OUTPUT=150.0f
+    -D ALT_LIDAR_MIN_CM=25.0f
+    -D ALT_LIDAR_MAX_CM=800.0f
+    -D ALT_LIDAR_MIN_ENGAGE_CM=100.0f
+    -D ALT_LIDAR_MAX_ENGAGE_CM=700.0f
 
 lib_deps =
     mikalhart/TinyGPSPlus @ ^1.0.3

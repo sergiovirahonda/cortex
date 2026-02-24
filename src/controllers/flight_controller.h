@@ -2,12 +2,15 @@
 #define FLIGHT_CONTROLLER_H
 
 #include "../models/attitude.h"
+#include "../models/altitude.h"
 #include "../models/motor_output.h"
 #include "../models/drone_command.h"
 #include "../config/drone_config.h"
 
 class FlightController {
     private:
+        const DroneConfig& config_;
+
         // Failsafe state
         unsigned long lastPacketTime;
         bool inFailsafe;
@@ -15,6 +18,9 @@ class FlightController {
         
         // Trim debounce state
         unsigned long lastTrimTime;
+    
+        // Altitude hold state
+        unsigned long lastAltitudeHoldTime;
         
         // Failsafe constants
         static const unsigned long FAILSAFE_TIMEOUT_MS = 1000;
@@ -22,13 +28,14 @@ class FlightController {
         static const int16_t FAILSAFE_THROTTLE_DECAY = 5;
         
     public:
-        FlightController();
+        explicit FlightController(const DroneConfig& droneConfig);
         void updateFailsafe(bool packetReceived, int16_t currentThrottle);
         bool isInFailsafe() const;
         void applyFailsafe(DroneCommand& command);
-        void updateTrims(DroneCommand& command, AttitudeTrim& attitudeTrim, const DroneConfig& droneConfig);
+        void updateTrims(DroneCommand& command, AttitudeTrim& attitudeTrim);
+        void updateAltitudeHolding(DroneCommand& command, Altitude& altitude, AltitudeHold& altitudeHold);
+        void lockAltitude(DroneCommand& command, Altitude& altitude, AltitudeHold& altitudeHold);
         void computeAttitudeCorrections(
-            const DroneConfig& droneConfig,
             DroneCommand& command,
             Attitude& attitude,
             AttitudeTrim& trim,

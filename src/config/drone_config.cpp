@@ -34,6 +34,19 @@ DroneConfig::DroneConfig() {
 
     yawFF = YAW_FF;
 
+    altitudeKp = ALT_KP;
+    altitudeKi = ALT_KI;
+    altitudeKd = ALT_KD;
+    altitudeHoverThrottle = ALT_HOVER_THROTTLE;
+    altitudeMaxCorrection = ALT_MAX_CORRECTION;
+    altitudeFusionKp = ALT_FUSION_KP;
+    altitudeFusionKi = ALT_FUSION_KI;
+    altitudeMaxIOutput = ALT_MAX_I_OUTPUT;
+    altitudeLidarMinCm = ALT_LIDAR_MIN_CM;
+    altitudeLidarMaxCm = ALT_LIDAR_MAX_CM;
+    altitudeLidarMinEngageCm = ALT_LIDAR_MIN_ENGAGE_CM;
+    altitudeLidarMaxEngageCm = ALT_LIDAR_MAX_ENGAGE_CM;
+
     maxPDOutput = MAX_PD_OUTPUT;
     maxIOutput = MAX_I_OUTPUT;
 
@@ -147,6 +160,44 @@ int DroneConfig::getThrottleFlightStart() const {
 
 float DroneConfig::getYawFF() const {
     return yawFF;
+}
+
+// Altitude hold getters
+float DroneConfig::getAltitudeKp() const {
+    return altitudeKp;
+}
+float DroneConfig::getAltitudeKi() const {
+    return altitudeKi;
+}
+float DroneConfig::getAltitudeKd() const {
+    return altitudeKd;
+}
+int DroneConfig::getAltitudeHoverThrottle() const {
+    return altitudeHoverThrottle;
+}
+float DroneConfig::getAltitudeMaxCorrection() const {
+    return altitudeMaxCorrection;
+}
+float DroneConfig::getAltitudeFusionKp() const {
+    return altitudeFusionKp;
+}
+float DroneConfig::getAltitudeFusionKi() const {
+    return altitudeFusionKi;
+}
+float DroneConfig::getAltitudeMaxIOutput() const {
+    return altitudeMaxIOutput;
+}
+float DroneConfig::getAltitudeLidarMinCm() const {
+    return altitudeLidarMinCm;
+}
+float DroneConfig::getAltitudeLidarMaxCm() const {
+    return altitudeLidarMaxCm;
+}
+float DroneConfig::getAltitudeLidarMinEngageCm() const {
+    return altitudeLidarMinEngageCm;
+}
+float DroneConfig::getAltitudeLidarMaxEngageCm() const {
+    return altitudeLidarMaxEngageCm;
 }
 
 // Output limit getters
