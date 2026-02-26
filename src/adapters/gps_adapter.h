@@ -2,34 +2,30 @@
 #define GPS_ADAPTER_H
 
 #include <Arduino.h>
-#include <TinyGPSPlus.h>
 
 /**
- * GPS over UART (NMEA). Pass serial and baud/pins; call begin(), then update() each loop, then use getters.
+ * GPS interface (e.g. NMEA over UART). Call begin(), then update() each loop, then use getters.
  */
 class GpsAdapter {
 public:
-    GpsAdapter(HardwareSerial* serial, uint32_t baud, int rxPin, int txPin);
-    void begin();
-    void update();
+    virtual ~GpsAdapter() = default;
 
-    bool locationIsValid() const;
-    double getLat();
-    double getLng();
-    uint32_t getSatellites();
-    bool altitudeIsValid() const;
-    double getAltitudeMeters();
+    virtual void begin() = 0;
+    virtual void update() = 0;
 
-    uint32_t getCharsProcessed();
-    uint32_t getPassedChecksum();
-    uint32_t getSentencesWithFix();
+    virtual bool locationIsValid() const = 0;
+    virtual double getLat() = 0;
+    virtual double getLng() = 0;
+    virtual uint32_t getSatellites() = 0;
+    virtual bool altitudeIsValid() const = 0;
+    virtual double getAltitudeMeters() = 0;
 
-private:
-    HardwareSerial* serial_;
-    uint32_t baud_;
-    int rxPin_;
-    int txPin_;
-    TinyGPSPlus gps_;
+    virtual uint32_t getCharsProcessed() = 0;
+    virtual uint32_t getPassedChecksum() = 0;
+    virtual uint32_t getSentencesWithFix() = 0;
+
+protected:
+    GpsAdapter() = default;
 };
 
 #endif

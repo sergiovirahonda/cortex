@@ -2,46 +2,30 @@
 #define DISPLAY_ADAPTER_H
 
 #include <Arduino.h>
-#include <Wire.h>
-
-class Adafruit_SSD1306;
 
 /**
- * Adapter for SSD1306 OLED display (e.g. 128x64 I2C).
- * Wraps Adafruit_SSD1306 and follows the same pattern as RadioAdapter, MPUAdapter.
- * Inherits Print so print()/println() work on the adapter.
+ * Display interface (e.g. OLED). Inherits Print so print()/println() work.
+ * Implementations wrap a specific display driver (e.g. SSD1306).
  */
 class DisplayAdapter : public Print {
 public:
-    DisplayAdapter(
-        int width,
-        int height,
-        TwoWire* wire,
-        int rstPin,
-        uint8_t i2cAddr = 0x3C
-    );
-    ~DisplayAdapter();
+    virtual ~DisplayAdapter() = default;
 
     /** Initialize display; returns false on failure. */
-    bool begin();
+    virtual bool begin() = 0;
 
-    void clearDisplay();
-    void setCursor(int16_t x, int16_t y);
-    void display();  // push buffer to screen
-    void setTextSize(uint8_t s);
-    void setTextColor(uint16_t color);
-    void invertDisplay(bool i);
+    virtual void clearDisplay() = 0;
+    virtual void setCursor(int16_t x, int16_t y) = 0;
+    virtual void display() = 0;
+    virtual void setTextSize(uint8_t s) = 0;
+    virtual void setTextColor(uint16_t color) = 0;
+    virtual void invertDisplay(bool i) = 0;
 
     /** Print interface: forward to underlying display. */
-    size_t write(uint8_t c) override;
+    size_t write(uint8_t c) override = 0;
 
-private:
-    Adafruit_SSD1306* display_;
-    int width_;
-    int height_;
-    TwoWire* wire_;
-    int rstPin_;
-    uint8_t i2cAddr_;
+protected:
+    DisplayAdapter() = default;
 };
 
 /** Common color for setTextColor (matches SSD1306_WHITE). */

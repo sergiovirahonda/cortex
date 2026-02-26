@@ -1,16 +1,16 @@
 #include "tf_luna_adapter.h"
 
-TFLunaAdapter::TFLunaAdapter(HardwareSerial* serial)
+TFLunaLidarAdapter::TFLunaLidarAdapter(HardwareSerial* serial)
     : serial_(serial), distanceCm_(0), signalStrength_(0), temperatureC_(0),
       distBufIdx_(0), distBufCount_(0), distSum_(0) {}
 
-void TFLunaAdapter::begin() {
+void TFLunaLidarAdapter::begin() {
     distBufIdx_ = 0;
     distBufCount_ = 0;
     distSum_ = 0;
 }
 
-void TFLunaAdapter::update() {
+void TFLunaLidarAdapter::update() {
     if (!serial_ || serial_->available() < FRAME_LEN) return;
 
     while (serial_->available() >= FRAME_LEN) {
