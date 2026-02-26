@@ -1,29 +1,22 @@
 #ifndef RADIO_ADAPTER_H
 #define RADIO_ADAPTER_H
 
-#include <nRF24L01.h>
-#include <RF24.h>
 #include "../models/drone_command.h"
 
+/**
+ * Radio interface for receiving commands and sending telemetry (e.g. nRF24L01).
+ */
 class RadioAdapter {
-    private:
-        RF24 radio;
-        int cePin;
-        int csnPin;
-        byte* address;
-    
-    public:
-        RadioAdapter(
-            int cePin,
-            int csnPin,
-            byte* address
-        );
-        void begin();
-        bool isChipConnected();
-        bool receivePacket(DronePacket &packet);
-        void sendTelemetry(TelemetryData &data);
+public:
+    virtual ~RadioAdapter() = default;
+
+    virtual void begin() = 0;
+    virtual bool isChipConnected() = 0;
+    virtual bool receivePacket(DronePacket& packet) = 0;
+    virtual void sendTelemetry(TelemetryData& data) = 0;
+
+protected:
+    RadioAdapter() = default;
 };
 
 #endif
-
-

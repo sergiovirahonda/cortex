@@ -11,13 +11,20 @@
 #include "models/motor_output.h"
 #include "models/drone_command.h"
 #include "adapters/radio_adapter.h"
+#include "adapters/nrf24_radio_adapter.h"
 #include "adapters/mpu_adapter.h"
+#include "adapters/mpu6050_adapter.h"
 #include "adapters/motor_adapter.h"
-#include "adapters/bmp280_adapter.h"
+#include "adapters/barometer_adapter.h"
+#include "adapters/bme280_adapter.h"
 #include "adapters/display_adapter.h"
+#include "adapters/ssd1306_display_adapter.h"
+#include "adapters/lidar_adapter.h"
 #include "adapters/tf_luna_adapter.h"
 #include "adapters/gps_adapter.h"
+#include "adapters/tiny_gps_adapter.h"
 #include "adapters/compass_adapter.h"
+#include "adapters/qmc5883l_adapter.h"
 #include "controllers/flight_controller.h"
 #include "controllers/display_controller.h"
 #include "tasks/avionics_task.h"
@@ -42,22 +49,29 @@ Attitude attitude(droneConfig);
 Altitude altitude(droneConfig);
 AttitudeTrim attitudeTrim;
 AltitudeHold altitudeHold;
-RadioAdapter radioAdapter(
+Nrf24RadioAdapter radioImpl(
     RADIO_CE_PIN,
     RADIO_CSN_PIN,
     const_cast<byte*>(droneConfig.getRadioAddress())
 );
-MPUAdapter mpuAdapter(&mpu);
-BME280Adapter bme280Adapter(&Wire);
+RadioAdapter* radioAdapter = &radioImpl;
+Mpu6050Adapter mpuImpl(&mpu);
+MPUAdapter* mpuAdapter = &mpuImpl;
+BME280BarometerAdapter barometerImpl(&Wire);
+BarometerAdapter* barometerAdapter = &barometerImpl;
 FlightController flightController(droneConfig);
 NativeDShotMotorAdapter esc1, esc2, esc3, esc4;
-DisplayAdapter displayAdapter(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RST, OLED_ADDR);
+Ssd1306DisplayAdapter displayImpl(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RST, OLED_ADDR);
+DisplayAdapter* displayAdapter = &displayImpl;
 HardwareSerial TFLunaSerial(1);
 HardwareSerial GpsSerial(2);
-TFLunaAdapter tfLuna(&TFLunaSerial);
-GpsAdapter gps(&GpsSerial, GPS_BAUD, GPS_RX_PIN, GPS_TX_PIN);
-CompassAdapter compass;
-DisplayController displayController(displayAdapter, droneConfig);
+TFLunaLidarAdapter lidarImpl(&TFLunaSerial);
+LidarAdapter* lidarAdapter = &lidarImpl;
+TinyGpsAdapter gpsImpl(&GpsSerial, GPS_BAUD, GPS_RX_PIN, GPS_TX_PIN);
+GpsAdapter* gps = &gpsImpl;
+QMC5883LCompassAdapter compassImpl;
+CompassAdapter* compass = &compassImpl;
+DisplayController displayController(*displayAdapter, droneConfig);
 
 static unsigned long lastScreenUpdate = 0;
 static unsigned long lastLoopTime = 0;
@@ -76,14 +90,14 @@ void setup() {
 
   // 2. Initialize OLED (only when display feature enabled)
   if (droneConfig.getFeatureFlagEnableDisplay()) {
-    if (!displayAdapter.begin()) {
+    if (!displayAdapter->begin()) {
       Serial.println(F("SSD1306 allocation failed. Checking I2C connection..."));
       for (;;); // Don't proceed, loop forever
     }
-    displayAdapter.clearDisplay();
-    displayAdapter.invertDisplay(false);
-    displayAdapter.setTextSize(1);
-    displayAdapter.setTextColor(DISPLAY_COLOR_WHITE);
+    displayAdapter->clearDisplay();
+    displayAdapter->invertDisplay(false);
+    displayAdapter->setTextSize(1);
+    displayAdapter->setTextColor(DISPLAY_COLOR_WHITE);
   }
   displayController.setCursor(0, 0);
   displayController.println("Initializing adapters...");
@@ -97,28 +111,28 @@ void setup() {
   esc4.init(M4_PIN, RMT_CHANNEL_3);
 
   // Initialize radio & MPU drivers
-  radioAdapter.begin();
-  if (!radioAdapter.isChipConnected()) {
+  radioAdapter->begin();
+  if (!radioAdapter->isChipConnected()) {
     displayController.println("Radio: FAIL");
     displayController.println("Check Wiring!");
     displayController.display();
     while (1); // Stop here
   }
-  mpuAdapter.begin();
-  bme280Adapter.begin();
+  mpuAdapter->begin();
+  barometerAdapter->begin();
   displayController.println("Radio status: OK");
   displayController.println("MPU status: OK");
-  displayController.println(bme280Adapter.isConnected() ? "BME280: OK" : "BME280: --");
+  displayController.println(barometerAdapter->isConnected() ? "BME280: OK" : "BME280: --");
   displayController.display();
   delay(5);
 
   // Initialize LIDAR, GPS, and Compass
   displayController.println("Initializing LIDAR, GPS, and Compass...");
   displayController.display();
-  compass.begin();
+  compass->begin();
   TFLunaSerial.begin(115200, SERIAL_8N1, TF_LUNA_RX_PIN, TF_LUNA_TX_PIN);
-  tfLuna.begin();
-  gps.begin();
+  lidarAdapter->begin();
+  gps->begin();
 
   displayController.println("LIDAR, GPS, and Compass initialized.");
   displayController.display();
@@ -136,7 +150,7 @@ void setup() {
   // Increase to 0.99 if you see angles jumping when motors spin.
   displayController.println("Calibrating MPU6050...");
   displayController.display();
-  mpuAdapter.calibrate(droneConfig);
+  mpuAdapter->calibrate(droneConfig);
   displayController.println("Calibration completed.");
   displayController.display();
 
@@ -182,11 +196,11 @@ void setup() {
   initAvionicsMutex();
   initRadioMutexes();
   static AvionicsParams avionicsParams;
-  avionicsParams.lidar = &tfLuna;
-  avionicsParams.gps = &gps;
-  avionicsParams.compass = &compass;
+  avionicsParams.lidar = lidarAdapter;
+  avionicsParams.gps = gps;
+  avionicsParams.compass = compass;
   startAvionicsTask(&avionicsParams, 0);
-  startRadioTask(&radioAdapter, 0);
+  startRadioTask(radioAdapter, 0);
 }
 
 void loop() {
@@ -233,8 +247,8 @@ void loop() {
   flightController.applyFailsafe(command);
 
   // B. Read Sensors
-  mpuAdapter.getAttitude(attitude);
-  mpuAdapter.getRawAccelGs(altitude);
+  mpuAdapter->getAttitude(attitude);
+  mpuAdapter->getRawAccelGs(altitude);
   altitude.updateSensors(
     attitude.getPitchAngle(),
     attitude.getRollAngle(),

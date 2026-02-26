@@ -118,9 +118,10 @@ void FlightController::lockAltitude(
     // Run the altitude PID to get the correction
     float correction = altitude.calculateAltitudePID(targetAlt);
 
-    // Apply the correction to the throttle
+    // Apply the correction to the throttle. Allowed to go below THROTTLE_FLIGHT_START
+    // when needed (e.g. above target → descend); altitude hold stays in control.
     float throttle = config_.getAltitudeHoverThrottle() + correction;
-    command.setThrottle(throttle); // Command override 1: Pure hover + PID
+    command.setThrottle((int16_t)throttle); // Command override 1: Pure hover + PID
 
     // Command override 2: Zero pitch and roll (level attitude)
     command.setPitch(0);

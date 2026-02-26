@@ -1,21 +1,19 @@
 #ifndef TF_LUNA_ADAPTER_H
 #define TF_LUNA_ADAPTER_H
 
-#include <Arduino.h>
+#include "lidar_adapter.h"
 
-/**
- * TF-Luna LiDAR over UART. Call update() each loop, then getDistanceCm(), getSignalStrength(), etc.
- * Default baud: 115200. Distance is filtered with a moving average to reduce noise.
- */
-class TFLunaAdapter {
+/** TF-Luna LiDAR over UART. Distance is filtered with a moving average. */
+class TFLunaLidarAdapter : public LidarAdapter {
 public:
-    TFLunaAdapter(HardwareSerial* serial);
-    void begin();   // call after serial->begin(115200, ...)
-    void update();  // call every loop
+    explicit TFLunaLidarAdapter(HardwareSerial* serial);
 
-    uint16_t getDistanceCm() const { return distanceCm_; }   // moving-average filtered
-    uint16_t getSignalStrength() const { return signalStrength_; }
-    float getTemperatureC() const { return temperatureC_; }
+    void begin() override;
+    void update() override;
+
+    uint16_t getDistanceCm() const override { return distanceCm_; }
+    uint16_t getSignalStrength() const override { return signalStrength_; }
+    float getTemperatureC() const override { return temperatureC_; }
 
 private:
     static const uint8_t FRAME_LEN = 9;
@@ -24,7 +22,7 @@ private:
     static const uint8_t DIST_FILTER_SIZE = 8;
 
     HardwareSerial* serial_;
-    uint16_t distanceCm_;      // filtered output
+    uint16_t distanceCm_;
     uint16_t signalStrength_;
     float temperatureC_;
     uint16_t distBuf_[DIST_FILTER_SIZE];

@@ -99,14 +99,21 @@ cortex/
 │   │   ├── avionics_task.*         # FreeRTOS task (core 0, 100 Hz): LIDAR/GPS/compass, mutex-protected
 │   │   └── radio_task.*            # FreeRTOS task (core 0, 1000 Hz): receive commands, send telemetry under mutex
 │   ├── adapters/
-│   │   ├── radio_adapter.*         # nRF24L01: receive commands, send telemetry (ACK payload)
-│   │   ├── mpu_adapter.*           # MPU6050 sensor interface
+│   │   ├── radio_adapter.h         # Radio interface
+│   │   ├── nrf24_radio_adapter.h/cpp # nRF24L01 implementation
+│   │   ├── mpu_adapter.h           # IMU/attitude interface
+│   │   ├── mpu6050_adapter.h/cpp  # MPU6050 implementation
 │   │   ├── motor_adapter.*         # DShot ESC control (native)
-│   │   ├── display_adapter.*      # SSD1306 OLED
-│   │   ├── tf_luna_adapter.*      # TF-Luna LIDAR (UART)
-│   │   ├── gps_adapter.*          # GPS (UART)
-│   │   ├── compass_adapter.*      # Compass (I2C bus 0)
-│   │   └── bmp280_adapter.*        # BME280 barometer (optional, feature-flagged)
+│   │   ├── display_adapter.h      # Display interface (Print)
+│   │   ├── ssd1306_display_adapter.h/cpp # SSD1306 OLED implementation
+│   │   ├── lidar_adapter.h        # LiDAR interface
+│   │   ├── tf_luna_adapter.h/cpp  # TF-Luna LiDAR implementation (UART)
+│   │   ├── gps_adapter.h          # GPS interface
+│   │   ├── tiny_gps_adapter.h/cpp # TinyGPS+ NMEA/UART implementation
+│   │   ├── compass_adapter.h     # Compass interface
+│   │   ├── qmc5883l_adapter.h/cpp # QMC5883L compass implementation (I2C bus 0)
+│   │   ├── barometer_adapter.h    # Barometer interface
+│   │   └── bme280_adapter.h/cpp   # BME280 barometer implementation
 │   └── models/
 │       ├── attitude.*              # Attitude state & PID (roll/pitch/yaw)
 │       ├── altitude.*              # Altitude state (LiDAR+accel fusion), AltitudeHold (engage/target), altitude PID
