@@ -24,7 +24,10 @@ private:
     float rollAngle, rollRate;
     float pitchAngle, pitchRate;
     float yawRate;
-    
+    float headingDeg_;
+    bool headingInitialized_;
+    bool onGround_;
+
     // Memory variables for the I-Term
     float rollErrorSum = 0;
     float pitchErrorSum = 0;
@@ -39,6 +42,12 @@ private:
 public:
         Attitude(const DroneConfig& droneConfig);
         void updateSensors(float rAngle, float rRate, float pAngle, float pRate, float yRate);
+        /** Set when drone is on ground (e.g. throttle &lt; idle); heading then uses compass only. Call before updateHeading each loop. */
+        void setOnGround(bool onGround);
+        /** Fused heading (gyro + compass). Call each loop after updateSensors. Uses last setOnGround() so gyro bias does not accumulate when idle. */
+        void updateHeading(float compassAzimuthDeg, float dtS, bool compassHealthy = true);
+        /** Fused heading in degrees [0, 360). */
+        float getHeadingDeg() const;
         // Raw getters
         float getRollAngle();
         float getRollRate();

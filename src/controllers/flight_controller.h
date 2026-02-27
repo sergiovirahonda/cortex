@@ -21,7 +21,11 @@ class FlightController {
     
         // Altitude hold state
         unsigned long lastAltitudeHoldTime;
-        
+
+        // Yaw hold (stick centered): lock heading
+        float targetYawHeadingDeg_;
+        bool yawHoldTargetSet_;
+
         // Failsafe constants
         static const unsigned long FAILSAFE_TIMEOUT_MS = 1000;
         static const int16_t FAILSAFE_LANDING_THROTTLE = 1200;

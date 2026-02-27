@@ -91,6 +91,12 @@
 #ifndef YAW_FF
 #define YAW_FF 1.0f
 #endif
+#ifndef YAW_HOLD_KP
+#define YAW_HOLD_KP 2.0f
+#endif
+#ifndef YAW_DEADZONE_RATE_DPS
+#define YAW_DEADZONE_RATE_DPS 5.0f
+#endif
 #ifndef ALT_KP
     #define ALT_KP 1.5f
 #endif

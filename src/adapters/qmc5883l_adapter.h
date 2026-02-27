@@ -13,6 +13,7 @@ public:
 
     void begin() override;
     void update() override;
+    bool isHealthy() const override;
     int getRawAzimuth() override;
     int getSmoothedAzimuth() override;
 

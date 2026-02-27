@@ -44,6 +44,7 @@ void AvionicsLoop(void* pvParameters) {
                 currentAvionics.gps.setAltitudeMeters(params->gps->getAltitudeMeters());
             }
             if (params->compass) {
+                currentAvionics.compass.setCompassHealth(params->compass->isHealthy());
                 currentAvionics.compass.setRawAzimuth(params->compass->getRawAzimuth());
                 currentAvionics.compass.setSmoothedAzimuth(params->compass->getSmoothedAzimuth());
             }

@@ -3,6 +3,7 @@
 #include "models/motor_output.h"
 #include "models/drone_command.h"
 #include "config/drone_config.h"
+#include "utils/angle_utils.h"
 
 #include <Arduino.h>
 
@@ -24,6 +25,8 @@ FlightController::FlightController(const DroneConfig& droneConfig) : config_(dro
     failsafeThrottle = FAILSAFE_LANDING_THROTTLE;
     lastTrimTime = 0;
     lastAltitudeHoldTime = 0;
+    targetYawHeadingDeg_ = 0.0f;
+    yawHoldTargetSet_ = false;
 }
 
 void FlightController::updateTrims(DroneCommand& command, AttitudeTrim& attitudeTrim) {
@@ -197,8 +200,23 @@ void FlightController::computeAttitudeCorrections(
     float desiredRoll  = (float)command.getRoll()  + trim.getRollTrim();   // degrees
     float desiredYaw   = (float)command.getYaw()   + trim.getYawTrim();    // deg/s (remap() converts stick to rate)
 
+    // Yaw hold: when stick is centered (deadzone), lock heading; else use stick rate
+    float deadzone = config_.getYawDeadzoneRateDps();
+    if (fabsf(desiredYaw) < deadzone) {
+        if (!yawHoldTargetSet_) {
+            targetYawHeadingDeg_ = attitude.getHeadingDeg();
+            yawHoldTargetSet_ = true;
+        }
+        // err > 0 means target is right of current heading; turn CW (negative rate) to reach it
+        float err = AngleUtils::wrap180(targetYawHeadingDeg_ - attitude.getHeadingDeg());
+        desiredYaw = -config_.getYawHoldKp() * err;
+    } else {
+        yawHoldTargetSet_ = false;
+    }
+
     if (throttle < idle) {
         attitude.resetPID();
+        yawHoldTargetSet_ = false;
         pitchPD = 0;
         rollPD  = 0;
         yawPD   = 0;
