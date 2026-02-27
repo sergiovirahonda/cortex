@@ -40,6 +40,9 @@ class DroneConfig {
 
         // Yaw rate feedforward (stage 3 only): output += YAW_FF * desiredYawRate for snappier stick response
         float yawFF;
+        // Yaw hold (stick centered): lock heading; Kp on heading error, deadzone in deg/s
+        float yawHoldKp;
+        float yawDeadzoneRateDps;
         
         // Output limits
         float maxPDOutput;
@@ -111,6 +114,8 @@ class DroneConfig {
         int getThrottleFlightStart() const;
 
         float getYawFF() const;
+        float getYawHoldKp() const;
+        float getYawDeadzoneRateDps() const;
 
         // Output limit getters
         float getMaxPDOutput() const;

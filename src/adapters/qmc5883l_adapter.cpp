@@ -1,5 +1,7 @@
 #include "qmc5883l_adapter.h"
+#include "../utils/angle_utils.h"
 #include <QMC5883LCompass.h>
+#include <math.h>
 
 QMC5883LCompassAdapter::QMC5883LCompassAdapter()
     : alpha_(0.15f), smoothedAzimuth_(0) {
@@ -13,6 +15,10 @@ QMC5883LCompassAdapter::~QMC5883LCompassAdapter() {
 
 void QMC5883LCompassAdapter::begin() {
     compass_->init();
+}
+
+bool QMC5883LCompassAdapter::isHealthy() const {
+    return compass_ != nullptr;
 }
 
 void QMC5883LCompassAdapter::update() {

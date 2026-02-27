@@ -67,6 +67,9 @@ build_flags =
     ; ----- YAW (deg/s at full stick; FF in stage 3 for snappier stick response) -----
     ; -D MAX_YAW_RATE_DPS=120
     ; -D YAW_FF=1.0f
+    ; ----- YAW HOLD (stick centered: lock heading; Kp = deg error -> deg/s, deadzone in deg/s) -----
+    ; -D YAW_HOLD_KP=2.0f
+    ; -D YAW_DEADZONE_RATE_DPS=5.0f
     ; ----- Altitude hold settings
     -D ALT_KP=1.5f
     -D ALT_KI=0.04f

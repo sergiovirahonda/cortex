@@ -10,6 +10,7 @@ public:
 
     virtual void begin() = 0;
     virtual void update() = 0;
+    virtual bool isHealthy() const = 0;
     virtual int getRawAzimuth() = 0;
     virtual int getSmoothedAzimuth() = 0;
 

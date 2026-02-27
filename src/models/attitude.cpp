@@ -1,6 +1,8 @@
 #include "attitude.h"
+#include "../utils/angle_utils.h"
 
 #include <Arduino.h>
+#include <math.h>
 
 // =================================================================
 // ATTITUDE TRIM CLASS
@@ -53,6 +55,13 @@ Attitude::Attitude(const DroneConfig& droneConfig) {
     pitchAngle = 0;
     pitchRate = 0;
     yawRate = 0;
+    headingDeg_ = 0.0f;
+    headingInitialized_ = false;
+    onGround_ = false;
+}
+
+void Attitude::setOnGround(bool onGround) {
+    onGround_ = onGround;
 }
 
 // Bulk setter
@@ -69,6 +78,37 @@ float Attitude::getRollRate() { return this->rollRate; }
 float Attitude::getPitchAngle() { return this->pitchAngle; }
 float Attitude::getPitchRate() { return this->pitchRate; }
 float Attitude::getYawRate() { return this->yawRate; }
+
+void Attitude::updateHeading(float compassAzimuthDeg, float dtS, bool compassHealthy) {
+    if (dtS <= 0.0f) return;
+    if (!headingInitialized_) {
+        headingDeg_ = AngleUtils::normalize360(compassAzimuthDeg);
+        headingInitialized_ = true;
+        return;
+    }
+    if (onGround_) {
+        if (compassHealthy) {
+            headingDeg_ = AngleUtils::normalize360(compassAzimuthDeg);
+        }
+        return;
+    }
+    // Gyro integration (use object's current yaw rate)
+    headingDeg_ += yawRate * dtS;
+    headingDeg_ = AngleUtils::normalize360(headingDeg_);
+    // Compass correction: gentle pull toward compass (same convention: 0=N, degrees increase CW).
+    if (compassHealthy) {
+        float rollRad = rollAngle * (PI / 180.0f);
+        float pitchRad = pitchAngle * (PI / 180.0f);
+        float weight = 0.08f * cosf(rollRad) * cosf(pitchRad);
+        if (weight < 0.0f) weight = 0.0f;
+        float err = AngleUtils::wrap180(compassAzimuthDeg - headingDeg_);
+        headingDeg_ = AngleUtils::normalize360(headingDeg_ + weight * err);
+    }
+}
+
+float Attitude::getHeadingDeg() const {
+    return headingDeg_;
+}
 
 // =================================================================
 // STABILIZATION LOGIC (PID with dt for loop-rate independence)

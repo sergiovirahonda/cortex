@@ -3,6 +3,7 @@
 CompassReadings::CompassReadings() {
     this->rawAzimuth = 0;
     this->smoothedAzimuth = 0;
+    this->healthy = false;
 }
 
 // Setters
@@ -15,6 +16,10 @@ void CompassReadings::setSmoothedAzimuth(int smoothedAzimuth) {
     this->smoothedAzimuth = smoothedAzimuth;
 }
 
+void CompassReadings::setCompassHealth(bool healthy) {
+    this->healthy = healthy;
+}
+
 // Getters
 
 int CompassReadings::getRawAzimuth() {
@@ -23,4 +28,8 @@ int CompassReadings::getRawAzimuth() {
 
 int CompassReadings::getSmoothedAzimuth() {
     return this->smoothedAzimuth;
+}
+
+bool CompassReadings::getCompassHealth() const {
+    return this->healthy;
 }

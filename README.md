@@ -6,6 +6,8 @@ A professional-grade ESP32-S3 flight controller for DIY quadcopter drones, featu
 
 Cortex is the flight control system (FC) for your DIY drone project. It receives wireless commands from the Synapse transmitter, processes sensor data from an MPU6050 gyroscope/accelerometer, and uses PID control algorithms to stabilize the drone while executing flight maneuvers. The controller runs on an ESP32-S3 microcontroller and communicates with a 4-in-1 ESC via native DShot protocol.
 
+**📖 Tuning reference:** For a complete guide to all parameters (pins, PID, throttle bands, yaw hold, altitude hold, trim, feature flags)—with typical ranges and when to tweak—see **[TUNING.md](TUNING.md)**.
+
 ## Features
 
 * 🚁 **Real-time Stabilization**: PD controllers for roll/pitch; yaw PI + rate feedforward (stage 3 only) for snappy stick response
@@ -15,6 +17,7 @@ Cortex is the flight control system (FC) for your DIY drone project. It receives
 * 📺 **OLED Telemetry Display**: Real-time flight data on the drone (attitude, throttle, motor outputs, trims)
 * 📤 **Radio Telemetry Downlink**: Sends throttle, roll, pitch, and altitude-hold state (7-byte packet) to the transmitter via nRF24 ACK payload (for Synapse display)
 * 📐 **Altitude Hold**: LiDAR + accelerometer fusion for vertical state; PID hold with engage (1) / no-op (0) / disengage (-1) from transmitter; failsafe auto-disengages; configurable min/max engage altitude and LiDAR valid range
+* 🧭 **Heading Lock (Yaw Hold)**: When yaw stick is centered, lock heading using fused compass + gyro (70/30); stick moved = rate control. Compass health check falls back to gyro-only if sensor is unhealthy.
 * 🔒 **Safety Features**: Arming sequence, throttle limits, and hardware initialization checks
 * 🧵 **Dual-Core Design**: Flight loop on core 1 (~1 kHz, no radio I/O); radio task on core 0 at 1000 Hz (receive + telemetry under mutex); avionics task on core 0 at 100 Hz (LIDAR, GPS, compass) with cross-core mutex for thread-safe reads
 * 📏 **Optional Avionics**: TF-Luna LIDAR, GPS (UART), and compass (I2C) supported; adapters are null-safe so sensors can be omitted per build
@@ -114,6 +117,8 @@ cortex/
 │   │   ├── qmc5883l_adapter.h/cpp # QMC5883L compass implementation (I2C bus 0)
 │   │   ├── barometer_adapter.h    # Barometer interface
 │   │   └── bme280_adapter.h/cpp   # BME280 barometer implementation
+│   ├── utils/
+│   │   └── angle_utils.h          # AngleUtils::wrap180, normalize360 (shortest-path, [0,360))
 │   └── models/
 │       ├── attitude.*              # Attitude state & PID (roll/pitch/yaw)
 │       ├── altitude.*              # Altitude state (LiDAR+accel fusion), AltitudeHold (engage/target), altitude PID
@@ -127,8 +132,8 @@ cortex/
 
 ### Key Components
 
-* **FlightController**: Throttle-band logic (launch / transition / flight), motor mixing matrix, trim updates, failsafe, altitude hold (engage/disengage and lock). Takes `DroneConfig` at construction; no config passed in method calls.
-* **Attitude**: Sensor state and PID: roll/pitch (PD + I in flight), yaw (PI in flight; rate feedforward in stage 3 for snappy stick response); launch vs flight gains via blend
+* **FlightController**: Throttle-band logic (launch / transition / flight), motor mixing matrix, trim updates, failsafe, altitude hold (engage/disengage and lock), yaw hold (stick centered = lock heading; stick moved = rate control). Takes `DroneConfig` at construction; no config passed in method calls.
+* **Attitude**: Sensor state and PID: roll/pitch (PD + I in flight), yaw (PI in flight; rate feedforward in stage 3 for snappy stick response); launch vs flight gains via blend. Fused heading (gyro + compass 70/30) for heading lock when yaw stick is centered.
 * **Altitude / AltitudeHold**: Vertical state from LiDAR + accelerometer fusion (complementary filter); altitude PID for hold; engage (1) / no-op (0) / disengage (-1) from command; LiDAR range sanity checks; disengage only clears PID state (keeps estimate for re-engage)
 * **DroneConfig**: All tunable constants (PID gains, throttle bands, limits, trim steps, altitude hold gains and LiDAR limits, radio address) in one place
 * **RadioAdapter**: nRF24L01 init; used only by the **radio task** on core 0 (receive, send telemetry). Core 1 never touches the radio.
@@ -144,9 +149,9 @@ cortex/
 0. **Thread-safe snapshots**: `getAvionicsMetrics(localAvionics)` (LIDAR/GPS/compass); `getLatestRadioCommand(packet, lastPacketTime)` (command from core 0 radio task).
 1. **Update command & submit telemetry**: If a new packet was available, load command, remap, then `submitTelemetry(throttle, roll, pitch, altitudeHoldEngaged)` so core 0 can send it via ACK payload (mutex-protected).
 2. **Failsafe**: Update failsafe state; override command if link lost.
-3. **Read Sensors**: Update MPU6050 attitude; feed raw accel Z to altitude; run altitude fusion (LiDAR + accel, with LiDAR range checks).
+3. **Read Sensors**: Update MPU6050 attitude; feed raw accel Z to altitude; run altitude fusion (LiDAR + accel, with LiDAR range checks); update fused heading (gyro + compass 70/30, compass health gated).
 4. **Altitude hold**: `updateAltitudeHolding()` first (engage on 1, disengage on -1; min/max engage altitude and throttle checks), then `lockAltitude()` (if engaged, override throttle/pitch/roll with hold PID and level attitude; if failsafe, disengage hold). Order ensures engage/disengage take effect the same frame.
-5. **Calculate PID**: Three throttle stages (launch = high Kp, transition = blend, flight = full PID); trim added to setpoint.
+5. **Calculate PID**: Three throttle stages (launch = high Kp, transition = blend, flight = full PID); trim added to setpoint. Yaw: if stick in deadzone, desired yaw rate = heading-hold (shortest-path error × YAW_HOLD_KP); else stick rate. Same yaw rate PI for both.
 6. **Mix Motors**: Apply mixing matrix (throttle + corrections).
 7. **Write Motors**: DShot to all 4 ESCs.
 8. **Update Trims**: Process trim buttons from command (debounced).
@@ -205,7 +210,9 @@ The OLED is updated at **~1 Hz** only when throttle is below 300 (idle), to avoi
 
 ### Pins and drone config (platformio.ini)
 
-Pins (GPIO, I2C, UART) and all drone tuning (PID gains, throttle bands, trim, feature flags) are set via **build_flags** in `platformio.ini`. Copy `platformio.ini.example` to `platformio.ini`, then edit the `build_flags` section to match your wiring and tuning. Defaults are in `src/config/pins_defaults.h` and `src/config/drone_config_defaults.h` if a flag is not defined. The radio pipe address is hardcoded in `src/config/drone_config.cpp`; change it there to match your Synapse transmitter.
+Pins (GPIO, I2C, UART) and all drone tuning (PID gains, throttle bands, trim, feature flags, yaw hold, altitude hold) are set via **build_flags** in `platformio.ini`. Copy `platformio.ini.example` to `platformio.ini`, then edit the `build_flags` section to match your wiring and tuning. Defaults are in `src/config/drone_config_defaults.h` if a flag is not defined. The radio pipe address is hardcoded in `src/config/drone_config.cpp`; change it there to match your Synapse transmitter.
+
+**Full parameter reference:** See **[TUNING.md](TUNING.md)** for a guide to every tuning parameter (pins, PID, throttle bands, yaw hold, altitude hold, trim, feature flags) with typical ranges and when to tweak.
 
 ### Radio Settings
 
@@ -256,6 +263,8 @@ All gains and limits are set via **`platformio.ini` build_flags** (defaults in `
 * **Transition (stage 2)**: Linear blend of launch and flight gains; I-term enabled in the upper part of the band.
 
 Throttle band constants: `throttleIdle`, `throttleLaunchEnd`, `throttleFlightStart`. Yaw stick scaling: `MAX_YAW_RATE_DPS` (deg/s at full stick).
+
+**Yaw hold (heading lock):** When the yaw stick is centered (within `YAW_DEADZONE_RATE_DPS`), the controller locks the current heading using fused compass + gyro. `YAW_HOLD_KP` converts heading error (deg) to desired yaw rate (deg/s). Compass health is checked; if unhealthy, fusion uses gyro-only. See **TUNING.md** for details.
 
 **Altitude hold** (LiDAR-based): `ALT_KP`, `ALT_KI`, `ALT_KD` (altitude PID); `ALT_HOVER_THROTTLE`, `ALT_MAX_CORRECTION`, `ALT_MAX_I_OUTPUT`; `ALT_FUSION_KP`, `ALT_FUSION_KI` (LiDAR+accel fusion); `ALT_LIDAR_MIN_CM`, `ALT_LIDAR_MAX_CM` (valid LiDAR range for fusion); `ALT_LIDAR_MIN_ENGAGE_CM`, `ALT_LIDAR_MAX_ENGAGE_CM` (min/max altitude to allow engaging hold). Engage requires throttle ≥ flight start and altitude in the engage band. Disengage on command (-1) or failsafe. Tune in `platformio.ini` to match your frame (e.g. 12" M2M, ~920 g: start with Kp ~1.5, add small Ki/Kd for drift and damping). (Note: `FEATURE_FLAG_ALTITUDE` is for BMP280 barometer reading, not for this LiDAR altitude hold.)
 

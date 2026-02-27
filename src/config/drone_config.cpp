@@ -33,6 +33,8 @@ DroneConfig::DroneConfig() {
     throttleFlightStart = THROTTLE_FLIGHT_START;
 
     yawFF = YAW_FF;
+    yawHoldKp = YAW_HOLD_KP;
+    yawDeadzoneRateDps = YAW_DEADZONE_RATE_DPS;
 
     altitudeKp = ALT_KP;
     altitudeKi = ALT_KI;
@@ -160,6 +162,14 @@ int DroneConfig::getThrottleFlightStart() const {
 
 float DroneConfig::getYawFF() const {
     return yawFF;
+}
+
+float DroneConfig::getYawHoldKp() const {
+    return yawHoldKp;
+}
+
+float DroneConfig::getYawDeadzoneRateDps() const {
+    return yawDeadzoneRateDps;
 }
 
 // Altitude hold getters

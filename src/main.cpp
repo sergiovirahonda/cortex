@@ -133,6 +133,7 @@ void setup() {
   TFLunaSerial.begin(115200, SERIAL_8N1, TF_LUNA_RX_PIN, TF_LUNA_TX_PIN);
   lidarAdapter->begin();
   gps->begin();
+  delay(150);  // Let's give the sensors some time to settle before we start using them.
 
   displayController.println("LIDAR, GPS, and Compass initialized.");
   displayController.display();
@@ -217,9 +218,11 @@ void loop() {
   
   // Measure loop frequency (running average so display shows ~average Hz, not fast/slow alternation)
   unsigned long now = micros();
+  float loopDtSec = 0.001f;
   if (lastLoopTime > 0) {
     unsigned long periodUs = now - lastLoopTime;
     if (periodUs > 0) {
+      loopDtSec = (float)periodUs / 1000000.0f;
       float instantHz = 1000000.0f / (float)periodUs;
       loopFrequencyHz = 0.995f * loopFrequencyHz + 0.005f * instantHz;  // smooth toward ~1200 Hz
     }
@@ -253,6 +256,12 @@ void loop() {
     attitude.getPitchAngle(),
     attitude.getRollAngle(),
     localAvionics.lidar.getDistanceCm()
+  );
+  attitude.setOnGround(command.getThrottle() < droneConfig.getThrottleIdle());
+  attitude.updateHeading(
+    (float)localAvionics.compass.getSmoothedAzimuth(),
+    loopDtSec,
+    localAvionics.compass.getCompassHealth()
   );
 
   // C. Update altitude holding and lock altitude
