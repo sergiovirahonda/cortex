@@ -30,6 +30,16 @@ Defaults live in `src/config/drone_config_defaults.h`; any flag you set in `plat
 
 ---
 
+## 2b. MPU6050 gyro filter
+
+The MPU6050 uses a complementary filter to fuse gyro and accel for roll/pitch angle. This coefficient sets the gyro weight (1 − coefficient is accel weight).
+
+| Flag | Description | Typical range | Tweak if |
+|------|-------------|---------------|----------|
+| `MPU_FILTER_GYRO_COEF` | Gyro coefficient in the complementary filter. Higher = trust gyro more (faster response, more noise). Lower = trust accel more (smoother, slower; accel drift shows up more). | 0.98–0.998 | Angle lags or feels sluggish → increase (e.g. 0.998). Noisy or jittery attitude → decrease (e.g. 0.98). Default 0.995 is a good middle ground. |
+
+---
+
 ## 3. Attitude PID (roll, pitch, yaw) — flight phase
 
 Used when throttle is **above** the transition zone (in steady flight). Lower gains = smoother; higher = stiffer, more responsive.
@@ -104,6 +114,7 @@ Three zones: **idle**, **launch** (high P, no I), **transition** (blend), **flig
 | `MAX_YAW_RATE_DPS` | Max yaw rate (deg/s) at full stick. | 100–180 | Snappier turn → increase. Gentler → decrease. |
 | `YAW_HOLD_KP` | When stick is centered: heading error (deg) × this = desired yaw rate (deg/s). | 1.0–3.0 | Hold overshoots or oscillates → reduce. Sluggish to correct heading → increase. |
 | `YAW_DEADZONE_RATE_DPS` | Stick considered “centered” when \|desired rate\| < this (deg/s). | 3–10 | Jitter between hold and rate → increase. Hard to engage hold → decrease. |
+| `YAW_FUSION_WEIGHT` | Base weight for compass correction of gyro-integrated heading. Actual weight is this × cos(roll)×cos(pitch) so correction is reduced when tilted. | 0.04–0.15 | Heading drifts away from compass → increase. Compass noise or mag interference pulls heading around → decrease. Default 0.08. |
 
 ---
 
@@ -139,10 +150,11 @@ Three zones: **idle**, **launch** (high P, no I), **transition** (blend), **flig
 
 1. **Pins and hardware** — Match your wiring and hardware.
 2. **Accel offsets** — Calibrate once and paste; keeps “level” consistent.
-3. **Throttle bands** — Set `THROTTLE_LAUNCH_END` and `THROTTLE_FLIGHT_START` around your real lift-off and hover.
-4. **Attitude PID (flight)** — Get stable hover: tune roll/pitch P first, then D, then I. Then yaw Kp/Ki and YAW_FF.
-5. **Launch gains** — If takeoff is wobbly or slow to level, adjust launch Kp/Kd.
-6. **Yaw hold** — If you use stick-centered heading lock: set `YAW_HOLD_KP` and `YAW_DEADZONE_RATE_DPS` to taste.
-7. **Altitude hold** (if enabled) — Set `ALT_HOVER_THROTTLE` to measured hover; tune ALT_KP, then ALT_KI/KD; adjust engage and LiDAR ranges as needed.
+3. **MPU6050 gyro filter** — If roll/pitch angle feels laggy or noisy, adjust `MPU_FILTER_GYRO_COEF` (see §2b).
+4. **Throttle bands** — Set `THROTTLE_LAUNCH_END` and `THROTTLE_FLIGHT_START` around your real lift-off and hover.
+5. **Attitude PID (flight)** — Get stable hover: tune roll/pitch P first, then D, then I. Then yaw Kp/Ki and YAW_FF.
+6. **Launch gains** — If takeoff is wobbly or slow to level, adjust launch Kp/Kd.
+7. **Yaw hold and fusion** — If you use stick-centered heading lock: set `YAW_HOLD_KP` and `YAW_DEADZONE_RATE_DPS`. If heading drifts from compass or is noisy, tune `YAW_FUSION_WEIGHT` (see §9).
+8. **Altitude hold** (if enabled) — Set `ALT_HOVER_THROTTLE` to measured hover; tune ALT_KP, then ALT_KI/KD; adjust engage and LiDAR ranges as needed.
 
 Change one thing at a time, test, then move on. If the craft is unstable, reduce gains (especially P and I) before increasing.

@@ -8,6 +8,7 @@ DroneConfig::DroneConfig() {
     accelOffsets.xOffset = ACCEL_X_OFFSET;
     accelOffsets.yOffset = ACCEL_Y_OFFSET;
     accelOffsets.zOffset = ACCEL_Z_OFFSET;
+    filterGyroCoef = MPU_FILTER_GYRO_COEF;
 
     // =================================================================
     // PID GAINS (from build_flags or drone_config_defaults.h)
@@ -35,6 +36,7 @@ DroneConfig::DroneConfig() {
     yawFF = YAW_FF;
     yawHoldKp = YAW_HOLD_KP;
     yawDeadzoneRateDps = YAW_DEADZONE_RATE_DPS;
+    yawFusionWeight = YAW_FUSION_WEIGHT;
 
     altitudeKp = ALT_KP;
     altitudeKi = ALT_KI;
@@ -78,6 +80,10 @@ float DroneConfig::getAccelYOffset() const {
 
 float DroneConfig::getAccelZOffset() const {
     return accelOffsets.zOffset;
+}
+
+float DroneConfig::getFilterGyroCoef() const {
+    return filterGyroCoef;
 }
 
 // Roll PID getters
@@ -170,6 +176,10 @@ float DroneConfig::getYawHoldKp() const {
 
 float DroneConfig::getYawDeadzoneRateDps() const {
     return yawDeadzoneRateDps;
+}
+
+float DroneConfig::getYawFusionWeight() const {
+    return yawFusionWeight;
 }
 
 // Altitude hold getters

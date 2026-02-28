@@ -21,7 +21,9 @@ class DroneConfig {
     private:
         // Accelerometer offsets
         AccelerometerOffsetConfig accelOffsets;
-        
+        // MPU6050 gyro filter coefficient (complementary filter; higher = more gyro, less accel)
+        float filterGyroCoef;
+
         // PID Gains (flight: low KP, full PID)
         PIDGains rollPID;
         PIDGains pitchPID;
@@ -43,7 +45,9 @@ class DroneConfig {
         // Yaw hold (stick centered): lock heading; Kp on heading error, deadzone in deg/s
         float yawHoldKp;
         float yawDeadzoneRateDps;
-        
+        // Yaw sensor fusion: weight for compass correction (base weight * cos(roll)*cos(pitch))
+        float yawFusionWeight;
+
         // Output limits
         float maxPDOutput;
         float maxIOutput;
@@ -82,7 +86,8 @@ class DroneConfig {
         float getAccelXOffset() const;
         float getAccelYOffset() const;
         float getAccelZOffset() const;
-        
+        float getFilterGyroCoef() const;
+
         // Roll PID getters
         PIDGains getRollPID() const;
         float getRollKp() const;
@@ -116,6 +121,7 @@ class DroneConfig {
         float getYawFF() const;
         float getYawHoldKp() const;
         float getYawDeadzoneRateDps() const;
+        float getYawFusionWeight() const;
 
         // Output limit getters
         float getMaxPDOutput() const;

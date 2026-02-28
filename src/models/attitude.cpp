@@ -99,7 +99,7 @@ void Attitude::updateHeading(float compassAzimuthDeg, float dtS, bool compassHea
     if (compassHealthy) {
         float rollRad = rollAngle * (PI / 180.0f);
         float pitchRad = pitchAngle * (PI / 180.0f);
-        float weight = 0.08f * cosf(rollRad) * cosf(pitchRad);
+        float weight = droneConfig.getYawFusionWeight() * cosf(rollRad) * cosf(pitchRad);
         if (weight < 0.0f) weight = 0.0f;
         float err = AngleUtils::wrap180(compassAzimuthDeg - headingDeg_);
         headingDeg_ = AngleUtils::normalize360(headingDeg_ + weight * err);

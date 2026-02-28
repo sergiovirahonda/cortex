@@ -40,6 +40,7 @@ build_flags =
     -D ACCEL_X_OFFSET=0.0350f
     -D "ACCEL_Y_OFFSET=-0.0035f"
     -D "ACCEL_Z_OFFSET=-0.0600f"
+    -D MPU_FILTER_GYRO_COEF=0.995f
     -D ROLL_KP=6.0f
     -D ROLL_KI=1.5f
     -D ROLL_KD=2.0f
@@ -70,6 +71,7 @@ build_flags =
     ; ----- YAW HOLD (stick centered: lock heading; Kp = deg error -> deg/s, deadzone in deg/s) -----
     ; -D YAW_HOLD_KP=2.0f
     ; -D YAW_DEADZONE_RATE_DPS=5.0f
+    ; -D YAW_FUSION_WEIGHT=0.08f
     ; ----- Altitude hold settings
     -D ALT_KP=1.5f
     -D ALT_KI=0.04f
