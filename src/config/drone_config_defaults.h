@@ -13,6 +13,9 @@
 #ifndef ACCEL_Z_OFFSET
 #define ACCEL_Z_OFFSET -0.0600f
 #endif
+#ifndef MPU_FILTER_GYRO_COEF
+#define MPU_FILTER_GYRO_COEF 0.995f
+#endif
 #ifndef ROLL_KP
 #define ROLL_KP 6.0f
 #endif
@@ -96,6 +99,9 @@
 #endif
 #ifndef YAW_DEADZONE_RATE_DPS
 #define YAW_DEADZONE_RATE_DPS 5.0f
+#endif
+#ifndef YAW_FUSION_WEIGHT
+#define YAW_FUSION_WEIGHT 0.08f
 #endif
 #ifndef ALT_KP
     #define ALT_KP 1.5f

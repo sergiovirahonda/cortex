@@ -16,7 +16,7 @@ void Mpu6050Adapter::begin() {
 }
 
 void Mpu6050Adapter::calibrate(const DroneConfig& droneConfig) {
-    mpu_->setFilterGyroCoef(0.995);
+    mpu_->setFilterGyroCoef(droneConfig.getFilterGyroCoef());
     mpu_->setAccOffsets(
         droneConfig.getAccelXOffset(),
         droneConfig.getAccelYOffset(),
