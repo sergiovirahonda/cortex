@@ -1,15 +1,15 @@
-#ifndef TINY_GPS_ADAPTER_H
-#define TINY_GPS_ADAPTER_H
+#ifndef BEITIAN_BE880_GPS_ADAPTER_H
+#define BEITIAN_BE880_GPS_ADAPTER_H
 
 #include "gps_adapter.h"
 
 class TinyGPSPlus;
 
-/** TinyGPS+ NMEA-over-UART implementation of GpsAdapter. */
-class TinyGpsAdapter : public GpsAdapter {
+/** Beitian BE880 GPS: NMEA over UART, implemented via TinyGPS+. */
+class BeitianBe880GpsAdapter : public GpsAdapter {
 public:
-    TinyGpsAdapter(HardwareSerial* serial, uint32_t baud, int rxPin, int txPin);
-    ~TinyGpsAdapter() override;
+    BeitianBe880GpsAdapter(HardwareSerial* serial, uint32_t baud, int rxPin, int txPin);
+    ~BeitianBe880GpsAdapter() override;
 
     void begin() override;
     void update() override;

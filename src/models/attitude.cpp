@@ -81,22 +81,32 @@ float Attitude::getYawRate() { return this->yawRate; }
 
 void Attitude::updateHeading(float compassAzimuthDeg, float dtS, bool compassHealthy) {
     if (dtS <= 0.0f) return;
+
+    bool useCompass = droneConfig.getFeatureFlagCompassHeading();
+
     if (!headingInitialized_) {
-        headingDeg_ = AngleUtils::normalize360(compassAzimuthDeg);
+        if (useCompass && compassHealthy) {
+            headingDeg_ = AngleUtils::normalize360(compassAzimuthDeg);
+        } else {
+            headingDeg_ = 0.0f;
+        }
         headingInitialized_ = true;
         return;
     }
+
     if (onGround_) {
-        if (compassHealthy) {
+        if (useCompass && compassHealthy) {
             headingDeg_ = AngleUtils::normalize360(compassAzimuthDeg);
         }
         return;
     }
-    // Gyro integration (use object's current yaw rate)
+
+    // Gyro integration
     headingDeg_ += yawRate * dtS;
     headingDeg_ = AngleUtils::normalize360(headingDeg_);
-    // Compass correction: gentle pull toward compass (same convention: 0=N, degrees increase CW).
-    if (compassHealthy) {
+
+    // Compass correction (only when feature enabled)
+    if (useCompass && compassHealthy) {
         float rollRad = rollAngle * (PI / 180.0f);
         float pitchRad = pitchAngle * (PI / 180.0f);
         float weight = droneConfig.getYawFusionWeight() * cosf(rollRad) * cosf(pitchRad);

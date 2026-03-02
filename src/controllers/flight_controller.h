@@ -30,15 +30,17 @@ class FlightController {
         static const unsigned long FAILSAFE_TIMEOUT_MS = 1000;
         static const int16_t FAILSAFE_LANDING_THROTTLE = 1200;
         static const int16_t FAILSAFE_THROTTLE_DECAY = 5;
-        
+
+        void processAltitudeHold(DroneCommand& command, Altitude& altitude, AltitudeHold& altitudeHold);
+        void applyFailsafe(DroneCommand& command);
+
     public:
         explicit FlightController(const DroneConfig& droneConfig);
         void updateFailsafe(bool packetReceived, int16_t currentThrottle);
         bool isInFailsafe() const;
-        void applyFailsafe(DroneCommand& command);
+        /** Altitude hold (engage/disengage, apply when engaged) then failsafe. May override command. Call after sensors. */
+        void applyAltitudeHold(DroneCommand& command, Altitude& altitude, AltitudeHold& altitudeHold);
         void updateTrims(DroneCommand& command, AttitudeTrim& attitudeTrim);
-        void updateAltitudeHolding(DroneCommand& command, Altitude& altitude, AltitudeHold& altitudeHold);
-        void lockAltitude(DroneCommand& command, Altitude& altitude, AltitudeHold& altitudeHold);
         void computeAttitudeCorrections(
             DroneCommand& command,
             Attitude& attitude,

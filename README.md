@@ -112,7 +112,7 @@ cortex/
 │   │   ├── lidar_adapter.h        # LiDAR interface
 │   │   ├── tf_luna_adapter.h/cpp  # TF-Luna LiDAR implementation (UART)
 │   │   ├── gps_adapter.h          # GPS interface
-│   │   ├── tiny_gps_adapter.h/cpp # TinyGPS+ NMEA/UART implementation
+│   │   ├── beitian_be880_gps_adapter.h/cpp # Beitian BE880 GPS (NMEA via TinyGPS+)
 │   │   ├── compass_adapter.h     # Compass interface
 │   │   ├── qmc5883l_adapter.h/cpp # QMC5883L compass implementation (I2C bus 0)
 │   │   ├── barometer_adapter.h    # Barometer interface
@@ -150,7 +150,7 @@ cortex/
 1. **Update command & submit telemetry**: If a new packet was available, load command, remap, then `submitTelemetry(throttle, roll, pitch, altitudeHoldEngaged)` so core 0 can send it via ACK payload (mutex-protected).
 2. **Failsafe**: Update failsafe state; override command if link lost.
 3. **Read Sensors**: Update MPU6050 attitude; feed raw accel Z to altitude; run altitude fusion (LiDAR + accel, with LiDAR range checks); update fused heading (gyro + compass 70/30, compass health gated).
-4. **Altitude hold**: `updateAltitudeHolding()` first (engage on 1, disengage on -1; min/max engage altitude and throttle checks), then `lockAltitude()` (if engaged, override throttle/pitch/roll with hold PID and level attitude; if failsafe, disengage hold). Order ensures engage/disengage take effect the same frame.
+4. **Altitude hold**: After sensors, `applyAltitudeHold()` runs altitude hold (engage on 1 with min/max altitude and throttle checks, disengage on -1 or failsafe; when engaged, override throttle/pitch/roll with hold PID) then failsafe (override if in failsafe). Single entry point for alt-hold state and overrides.
 5. **Calculate PID**: Three throttle stages (launch = high Kp, transition = blend, flight = full PID); trim added to setpoint. Yaw: if stick in deadzone, desired yaw rate = heading-hold (shortest-path error × YAW_HOLD_KP); else stick rate. Same yaw rate PI for both.
 6. **Mix Motors**: Apply mixing matrix (throttle + corrections).
 7. **Write Motors**: DShot to all 4 ESCs.

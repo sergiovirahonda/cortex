@@ -22,7 +22,7 @@
 #include "adapters/lidar_adapter.h"
 #include "adapters/tf_luna_adapter.h"
 #include "adapters/gps_adapter.h"
-#include "adapters/tiny_gps_adapter.h"
+#include "adapters/beitian_be880_gps_adapter.h"
 #include "adapters/compass_adapter.h"
 #include "adapters/qmc5883l_adapter.h"
 #include "controllers/flight_controller.h"
@@ -30,6 +30,7 @@
 #include "tasks/avionics_task.h"
 #include "tasks/radio_task.h"
 #include "config/pins.h"
+#include "utils/loop_utils.h"
 
 // =================================================================
 // MPU-6050 OBJECT AND VARIABLES
@@ -67,7 +68,7 @@ HardwareSerial TFLunaSerial(1);
 HardwareSerial GpsSerial(2);
 TFLunaLidarAdapter lidarImpl(&TFLunaSerial);
 LidarAdapter* lidarAdapter = &lidarImpl;
-TinyGpsAdapter gpsImpl(&GpsSerial, GPS_BAUD, GPS_RX_PIN, GPS_TX_PIN);
+BeitianBe880GpsAdapter gpsImpl(&GpsSerial, GPS_BAUD, GPS_RX_PIN, GPS_TX_PIN);
 GpsAdapter* gps = &gpsImpl;
 QMC5883LCompassAdapter compassImpl;
 CompassAdapter* compass = &compassImpl;
@@ -215,20 +216,9 @@ void loop() {
   // ================================================================
   // 1. FAST LOOP (FLIGHT CRITICAL) - 1000Hz
   // ================================================================
-  
-  // Measure loop frequency (running average so display shows ~average Hz, not fast/slow alternation)
   unsigned long now = micros();
-  float loopDtSec = 0.001f;
-  if (lastLoopTime > 0) {
-    unsigned long periodUs = now - lastLoopTime;
-    if (periodUs > 0) {
-      loopDtSec = (float)periodUs / 1000000.0f;
-      float instantHz = 1000000.0f / (float)periodUs;
-      loopFrequencyHz = 0.995f * loopFrequencyHz + 0.005f * instantHz;  // smooth toward ~1200 Hz
-    }
-  }
-  lastLoopTime = now;
-  
+  float loopDtSec = LoopUtils::computeLoopDtAndHz(now, lastLoopTime, loopFrequencyHz);
+
   // A. Get latest command from radio task (core 0)
   DronePacket packet;
   unsigned long lastPacketTime;
@@ -244,10 +234,8 @@ void loop() {
     );
   }
   
-  // Update failsafe state and apply failsafe if needed
-  // Pass current throttle to check if drone is flying before activating failsafe
+  // Update failsafe state (pipeline runs after sensors)
   flightController.updateFailsafe(packetReceived, command.getThrottle());
-  flightController.applyFailsafe(command);
 
   // B. Read Sensors
   mpuAdapter->getAttitude(attitude);
@@ -264,9 +252,8 @@ void loop() {
     localAvionics.compass.getCompassHealth()
   );
 
-  // C. Update altitude holding and lock altitude
-  flightController.updateAltitudeHolding(command, altitude, altitudeHold);
-  flightController.lockAltitude(command, altitude, altitudeHold);
+  // C. Altitude hold (then failsafe) may override command
+  flightController.applyAltitudeHold(command, altitude, altitudeHold);
 
   // D. Calculate PID
 

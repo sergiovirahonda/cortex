@@ -104,6 +104,7 @@ Three zones: **idle**, **launch** (high P, no I), **transition** (blend), **flig
 |------|-------------|--------|
 | `FEATURE_FLAG_ALTITUDE` | Enable altitude hold (LiDAR + baro/accel fusion). | 0 = off, 1 = on |
 | `FEATURE_FLAG_DISPLAY` | Enable OLED display and status screens. | 0 = off, 1 = on |
+| `FEATURE_FLAG_COMPASS_HEADING` | Use compass in heading. When **on** (1): gyro + compass fusion (init, on-ground, and in-flight correction). When **off** (0): pure MPU (gyro only; no compass). | 0 = gyro only, 1 = fusion (default) |
 
 ---
 
