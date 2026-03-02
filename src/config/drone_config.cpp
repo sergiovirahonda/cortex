@@ -60,6 +60,7 @@ DroneConfig::DroneConfig() {
 
     featureFlagEnableAltitudeReading = (FEATURE_FLAG_ALTITUDE != 0);
     featureFlagEnableDisplay = (FEATURE_FLAG_DISPLAY != 0);
+    featureFlagCompassHeading = (FEATURE_FLAG_COMPASS_HEADING != 0);
 
     // Radio address: hardcoded; must match Synapse TX
     memcpy(radioAddress, "00001", 6);
@@ -249,6 +250,10 @@ bool DroneConfig::getFeatureFlagEnableAltitudeReading() const {
 
 bool DroneConfig::getFeatureFlagEnableDisplay() const {
     return featureFlagEnableDisplay;
+}
+
+bool DroneConfig::getFeatureFlagCompassHeading() const {
+    return featureFlagCompassHeading;
 }
 
 const byte* DroneConfig::getRadioAddress() const {

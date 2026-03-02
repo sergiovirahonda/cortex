@@ -67,27 +67,31 @@ void FlightController::updateTrims(DroneCommand& command, AttitudeTrim& attitude
     }
 }
 
-void FlightController::updateAltitudeHolding(
+void FlightController::processAltitudeHold(
     DroneCommand& command,
     Altitude& altitude,
     AltitudeHold& altitudeHold
 ) {
-    // Failsafe disengage is handled in lockAltitude(); here we only handle pilot command (1 = engage, -1 = disengage).
-
-    if (command.getAltitudeHold() == 0 ) {
+    // --- State transitions: disengage ---
+    if (command.getAltitudeHold() == -1 && altitudeHold.getAltitudeHoldEngaged()) {
+        altitudeHold.reset();
+        altitude.resetPID();
+        return;
+    }
+    if (isInFailsafe() && altitudeHold.getAltitudeHoldEngaged()) {
+        altitudeHold.reset();
+        altitude.resetPID();
         return;
     }
 
+    // --- State transitions: engage ---
     if (command.getAltitudeHold() == 1 && !altitudeHold.getAltitudeHoldEngaged()) {
-        // Min height to engage (e.g. 1 m) so we have stable flight before hold; separate from LiDAR range.
         if (altitude.getCurrentAltitudeCm() < config_.getAltitudeLidarMinEngageCm()) {
             return;
         }
-        // Max height: don't engage too high (e.g. above 7 m)
         if (altitude.getCurrentAltitudeCm() > config_.getAltitudeLidarMaxEngageCm()) {
             return;
         }
-        // Throttle: must be in flight range
         if (command.getThrottle() < config_.getThrottleFlightStart()) {
             return;
         }
@@ -95,41 +99,26 @@ void FlightController::updateAltitudeHolding(
         altitudeHold.setTargetAltitudeCm(altitude.getCurrentAltitudeCm());
     }
 
-    if (command.getAltitudeHold() == -1 && altitudeHold.getAltitudeHoldEngaged()) {
-        altitudeHold.reset();
-        altitude.resetPID();  // Clear I-term only; keep fused altitude/velocity so re-engage has a sane estimate
+    // --- Apply when engaged (and not in failsafe; we already disengaged above) ---
+    if (!altitudeHold.getAltitudeHoldEngaged()) {
+        return;
     }
+    float targetAlt = altitudeHold.getTargetAltitudeCm();
+    float correction = altitude.calculateAltitudePID(targetAlt);
+    float throttle = config_.getAltitudeHoverThrottle() + correction;
+    command.setThrottle((int16_t)throttle);
+    command.setPitch(0);
+    command.setRoll(0);
+    command.setYaw(0);
 }
 
-void FlightController::lockAltitude(
+void FlightController::applyAltitudeHold(
     DroneCommand& command,
     Altitude& altitude,
     AltitudeHold& altitudeHold
 ) {
-    if (!altitudeHold.getAltitudeHoldEngaged()) {
-        return;
-    }
-    // If the radio is dead, immediately disengage AltHold so the failsafe landing can happen
-    if (this->isInFailsafe()) {
-        altitudeHold.reset();
-        altitude.resetPID();
-        return; 
-    }
-    // Notice: We completely ignore the user's physical throttle stick here.
-    float targetAlt = altitudeHold.getTargetAltitudeCm();
-
-    // Run the altitude PID to get the correction
-    float correction = altitude.calculateAltitudePID(targetAlt);
-
-    // Apply the correction to the throttle. Allowed to go below THROTTLE_FLIGHT_START
-    // when needed (e.g. above target → descend); altitude hold stays in control.
-    float throttle = config_.getAltitudeHoverThrottle() + correction;
-    command.setThrottle((int16_t)throttle); // Command override 1: Pure hover + PID
-
-    // Command override 2: Zero pitch and roll (level attitude)
-    command.setPitch(0);
-    command.setRoll(0);
-    command.setYaw(0);
+    processAltitudeHold(command, altitude, altitudeHold);
+    applyFailsafe(command);
 }
 
 void FlightController::updateFailsafe(bool packetReceived, int16_t currentThrottle) {

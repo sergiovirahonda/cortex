@@ -74,6 +74,7 @@ class DroneConfig {
         // Feature flags
         bool featureFlagEnableAltitudeReading;
         bool featureFlagEnableDisplay;
+        bool featureFlagCompassHeading;
 
         // Radio (nRF24L01 pipe address; must match TX)
         byte radioAddress[6];
@@ -149,6 +150,7 @@ class DroneConfig {
         // Feature flags getters
         bool getFeatureFlagEnableAltitudeReading() const;
         bool getFeatureFlagEnableDisplay() const;
+        bool getFeatureFlagCompassHeading() const;
 
         // Radio address getter (for RadioAdapter; must match TX address)
         const byte* getRadioAddress() const;
