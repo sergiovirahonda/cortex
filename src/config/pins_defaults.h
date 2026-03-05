@@ -54,7 +54,7 @@
 #endif
 
 // ---------------------------------------------------------
-// I2C BUS 0 (OLED & COMPASS)
+// I2C BUS 0 (OLED, Compass, BME280, INA219 – avionics, Core 0)
 // ---------------------------------------------------------
 #ifndef I2C_SDA
 #define I2C_SDA  1

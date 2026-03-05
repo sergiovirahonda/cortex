@@ -48,6 +48,21 @@ void AvionicsLoop(void* pvParameters) {
                 currentAvionics.compass.setRawAzimuth(params->compass->getRawAzimuth());
                 currentAvionics.compass.setSmoothedAzimuth(params->compass->getSmoothedAzimuth());
             }
+            if (params->barometer) {
+                currentAvionics.barometer.setConnected(params->barometer->isConnected());
+                if (params->barometer->isConnected()) {
+                    currentAvionics.barometer.setPressureHpa(params->barometer->readPressureHpa());
+                    currentAvionics.barometer.setAltitudeMeters(params->barometer->readAltitudeMeters(1013.25f));
+                }
+            }
+            if (params->currentSensor) {
+                currentAvionics.currentSensor.setConnected(params->currentSensor->isConnected());
+                if (params->currentSensor->isConnected()) {
+                    currentAvionics.currentSensor.setBusVoltageV(params->currentSensor->getBusVoltageV());
+                    currentAvionics.currentSensor.setCurrentMa(params->currentSensor->getCurrentMa());
+                    currentAvionics.currentSensor.setPowerMw(params->currentSensor->getPowerMw());
+                }
+            }
             xSemaphoreGive(avionicsMutex);
         }
 

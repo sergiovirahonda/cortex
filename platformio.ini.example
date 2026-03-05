@@ -93,6 +93,7 @@ lib_deps =
     adafruit/Adafruit GFX Library @ ^1.11.5
     adafruit/Adafruit BME280 Library @ ^2.3.0
     adafruit/Adafruit Unified Sensor @ ^1.1.14
+    adafruit/Adafruit INA219 @ ^1.2.2
     rfetick/MPU6050_light @ ^1.1.0
     https://github.com/mprograms/QMC5883LCompass.git @ ^1.2.3
     RF24

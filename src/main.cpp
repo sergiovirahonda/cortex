@@ -25,6 +25,8 @@
 #include "adapters/beitian_be880_gps_adapter.h"
 #include "adapters/compass_adapter.h"
 #include "adapters/qmc5883l_adapter.h"
+#include "adapters/current_sensor_adapter.h"
+#include "adapters/ina219_current_sensor_adapter.h"
 #include "controllers/flight_controller.h"
 #include "controllers/display_controller.h"
 #include "tasks/avionics_task.h"
@@ -60,6 +62,8 @@ Mpu6050Adapter mpuImpl(&mpu);
 MPUAdapter* mpuAdapter = &mpuImpl;
 BME280BarometerAdapter barometerImpl(&Wire);
 BarometerAdapter* barometerAdapter = &barometerImpl;
+Ina219CurrentSensorAdapter currentSensorImpl(&Wire);
+CurrentSensorAdapter* currentSensorAdapter = &currentSensorImpl;
 FlightController flightController(droneConfig);
 NativeDShotMotorAdapter esc1, esc2, esc3, esc4;
 Ssd1306DisplayAdapter displayImpl(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RST, OLED_ADDR);
@@ -124,6 +128,8 @@ void setup() {
   displayController.println("Radio status: OK");
   displayController.println("MPU status: OK");
   displayController.println(barometerAdapter->isConnected() ? "BME280: OK" : "BME280: --");
+  currentSensorAdapter->begin();
+  displayController.println(currentSensorAdapter->isConnected() ? "INA219: OK" : "INA219: --");
   displayController.display();
   delay(5);
 
@@ -201,6 +207,8 @@ void setup() {
   avionicsParams.lidar = lidarAdapter;
   avionicsParams.gps = gps;
   avionicsParams.compass = compass;
+  avionicsParams.barometer = barometerAdapter;
+  avionicsParams.currentSensor = currentSensorAdapter;
   startAvionicsTask(&avionicsParams, 0);
   startRadioTask(radioAdapter, 0);
 }
