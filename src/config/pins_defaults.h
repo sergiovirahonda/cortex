@@ -5,7 +5,7 @@
 // Override any of these in platformio.ini to customize without editing code.
 
 // ---------------------------------------------------------
-// NRF24 RADIO
+// NRF24 RADIO (GPIO 9–14 reserved for radio; do not use for SD or other peripherals)
 // ---------------------------------------------------------
 #ifndef RADIO_CE_PIN
 #define RADIO_CE_PIN  14
@@ -90,6 +90,24 @@
 #endif
 #ifndef MPU_ADDR
 #define MPU_ADDR 0x68
+#endif
+
+// ---------------------------------------------------------
+// MICROSD (SPI – blackbox logging, Core 0)
+// Do NOT use GPIO 9–14 (NRF24 radio) or 17–18 (MPU I2C). See above.
+// Defaults: CS=48, SCK=47, MOSI=19, MISO=20. Override in platformio.ini if needed.
+// ---------------------------------------------------------
+#ifndef SD_CS_PIN
+#define SD_CS_PIN   48
+#endif
+#ifndef SD_MOSI_PIN
+#define SD_MOSI_PIN 19
+#endif
+#ifndef SD_SCK_PIN
+#define SD_SCK_PIN  47
+#endif
+#ifndef SD_MISO_PIN
+#define SD_MISO_PIN 20
 #endif
 
 #endif

@@ -22,11 +22,11 @@ void CompassReadings::setCompassHealth(bool healthy) {
 
 // Getters
 
-int CompassReadings::getRawAzimuth() {
+int CompassReadings::getRawAzimuth() const {
     return this->rawAzimuth;
 }
 
-int CompassReadings::getSmoothedAzimuth() {
+int CompassReadings::getSmoothedAzimuth() const {
     return this->smoothedAzimuth;
 }
 

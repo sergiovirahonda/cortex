@@ -1,5 +1,6 @@
 #include "drone_config.h"
 #include "drone_config_defaults.h"
+#include <cstring>
 
 DroneConfig::DroneConfig() {
     // =================================================================
@@ -64,6 +65,16 @@ DroneConfig::DroneConfig() {
 
     // Radio address: hardcoded; must match Synapse TX
     memcpy(radioAddress, "00001", 6);
+
+    // Blackbox: from build_flags or defaults
+    blackboxQueueLen = BLACKBOX_QUEUE_LEN;
+    blackboxProcessRateMs = BLACKBOX_PROCESS_RATE_MS;
+    strncpy(blackboxIndexFilename, BLACKBOX_INDEX_FILENAME, BLACKBOX_INDEX_FILENAME_MAX - 1);
+    blackboxIndexFilename[BLACKBOX_INDEX_FILENAME_MAX - 1] = '\0';
+    strncpy(blackboxLogPrefix, BLACKBOX_LOG_PREFIX, BLACKBOX_LOG_PREFIX_MAX - 1);
+    blackboxLogPrefix[BLACKBOX_LOG_PREFIX_MAX - 1] = '\0';
+    strncpy(blackboxLogSuffix, BLACKBOX_LOG_SUFFIX, BLACKBOX_LOG_SUFFIX_MAX - 1);
+    blackboxLogSuffix[BLACKBOX_LOG_SUFFIX_MAX - 1] = '\0';
 }
 
 // Accelerometer offset getters
@@ -258,4 +269,24 @@ bool DroneConfig::getFeatureFlagCompassHeading() const {
 
 const byte* DroneConfig::getRadioAddress() const {
     return radioAddress;
+}
+
+uint32_t DroneConfig::getBlackboxQueueLen() const {
+    return blackboxQueueLen;
+}
+
+uint32_t DroneConfig::getBlackboxProcessRateMs() const {
+    return blackboxProcessRateMs;
+}
+
+const char* DroneConfig::getBlackboxIndexFilename() const {
+    return blackboxIndexFilename;
+}
+
+const char* DroneConfig::getBlackboxLogPrefix() const {
+    return blackboxLogPrefix;
+}
+
+const char* DroneConfig::getBlackboxLogSuffix() const {
+    return blackboxLogSuffix;
 }

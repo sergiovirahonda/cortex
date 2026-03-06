@@ -33,6 +33,11 @@ build_flags =
     -D MPU_SDA=17
     -D MPU_SCL=18
     -D SCREEN_WIDTH=128
+    ; ----- MicroSD (SPI blackbox): do NOT use 9–14 (radio) or 17/18 (MPU). Defaults: CS=48 SCK=47 MOSI=19 MISO=20 -----
+    ; -D SD_CS_PIN=48
+    ; -D SD_MOSI_PIN=19
+    ; -D SD_SCK_PIN=47
+    ; -D SD_MISO_PIN=20
     -D SCREEN_HEIGHT=64
     -D OLED_ADDR=0x3C
     -D MPU_ADDR=0x68
@@ -86,6 +91,12 @@ build_flags =
     -D ALT_LIDAR_MAX_CM=800.0f
     -D ALT_LIDAR_MIN_ENGAGE_CM=100.0f
     -D ALT_LIDAR_MAX_ENGAGE_CM=700.0f
+    ; ----- Blackbox (SD flight log: queue size, process rate, file naming) -----
+    ; -D BLACKBOX_QUEUE_LEN=128
+    ; -D BLACKBOX_PROCESS_RATE_MS=20
+    ; -D BLACKBOX_INDEX_FILENAME="/blackbox_index.txt"
+    ; -D BLACKBOX_LOG_PREFIX="flight_"
+    ; -D BLACKBOX_LOG_SUFFIX=".csv"
 
 lib_deps =
     mikalhart/TinyGPSPlus @ ^1.0.3

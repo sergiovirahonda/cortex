@@ -73,11 +73,11 @@ void Attitude::updateSensors(float rAngle, float rRate, float pAngle, float pRat
     this->yawRate   = yRate;
 }
 // Raw getters
-float Attitude::getRollAngle() { return this->rollAngle; }
-float Attitude::getRollRate() { return this->rollRate; }
-float Attitude::getPitchAngle() { return this->pitchAngle; }
-float Attitude::getPitchRate() { return this->pitchRate; }
-float Attitude::getYawRate() { return this->yawRate; }
+float Attitude::getRollAngle() const { return this->rollAngle; }
+float Attitude::getRollRate() const { return this->rollRate; }
+float Attitude::getPitchAngle() const { return this->pitchAngle; }
+float Attitude::getPitchRate() const { return this->pitchRate; }
+float Attitude::getYawRate() const { return this->yawRate; }
 
 void Attitude::updateHeading(float compassAzimuthDeg, float dtS, bool compassHealthy) {
     if (dtS <= 0.0f) return;
@@ -118,6 +118,26 @@ void Attitude::updateHeading(float compassAzimuthDeg, float dtS, bool compassHea
 
 float Attitude::getHeadingDeg() const {
     return headingDeg_;
+}
+
+bool Attitude::getHeadingInitialized() const {
+    return headingInitialized_;
+}
+
+bool Attitude::getOnGround() const {
+    return onGround_;
+}
+
+float Attitude::getRollErrorSum() const {
+    return rollErrorSum;
+}
+
+float Attitude::getPitchErrorSum() const {
+    return pitchErrorSum;
+}
+
+float Attitude::getYawErrorSum() const {
+    return yawErrorSum;
 }
 
 // =================================================================

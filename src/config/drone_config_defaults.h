@@ -143,4 +143,21 @@
     #define ALT_LIDAR_MAX_ENGAGE_CM 700.0f
 #endif
 
+// Blackbox: at 50 Hz, 128 frames ≈ 2.5 s buffer; increase if SD is slow.
+#ifndef BLACKBOX_QUEUE_LEN
+#define BLACKBOX_QUEUE_LEN 128
+#endif
+#ifndef BLACKBOX_PROCESS_RATE_MS
+#define BLACKBOX_PROCESS_RATE_MS 20
+#endif
+#ifndef BLACKBOX_INDEX_FILENAME
+#define BLACKBOX_INDEX_FILENAME "/blackbox_index.txt"
+#endif
+#ifndef BLACKBOX_LOG_PREFIX
+#define BLACKBOX_LOG_PREFIX "flight_"
+#endif
+#ifndef BLACKBOX_LOG_SUFFIX
+#define BLACKBOX_LOG_SUFFIX ".csv"
+#endif
+
 #endif

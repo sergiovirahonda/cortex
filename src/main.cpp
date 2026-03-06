@@ -29,8 +29,13 @@
 #include "adapters/ina219_current_sensor_adapter.h"
 #include "controllers/flight_controller.h"
 #include "controllers/display_controller.h"
+#include "controllers/blackbox_controller.h"
+#include "adapters/storage_adapter.h"
+#include "adapters/sd_card_storage_adapter.h"
 #include "tasks/avionics_task.h"
 #include "tasks/radio_task.h"
+#include "tasks/blackbox_task.h"
+#include "models/blackbox_frame.h"
 #include "config/pins.h"
 #include "utils/loop_utils.h"
 
@@ -58,25 +63,41 @@ Nrf24RadioAdapter radioImpl(
     const_cast<byte*>(droneConfig.getRadioAddress())
 );
 RadioAdapter* radioAdapter = &radioImpl;
+
+// IMU (MPU6050)
 Mpu6050Adapter mpuImpl(&mpu);
 MPUAdapter* mpuAdapter = &mpuImpl;
+
+// Barometer & current sensor (I2C: BME280, INA219)
 BME280BarometerAdapter barometerImpl(&Wire);
 BarometerAdapter* barometerAdapter = &barometerImpl;
 Ina219CurrentSensorAdapter currentSensorImpl(&Wire);
 CurrentSensorAdapter* currentSensorAdapter = &currentSensorImpl;
+
+// Flight controller and ESCs
 FlightController flightController(droneConfig);
 NativeDShotMotorAdapter esc1, esc2, esc3, esc4;
+
+// Display (OLED, I2C)
 Ssd1306DisplayAdapter displayImpl(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RST, OLED_ADDR);
 DisplayAdapter* displayAdapter = &displayImpl;
+DisplayController displayController(*displayAdapter, droneConfig);
+
+// Serial peripherals: Lidar (TF-Luna) and GPS (Beitian BE880)
 HardwareSerial TFLunaSerial(1);
 HardwareSerial GpsSerial(2);
 TFLunaLidarAdapter lidarImpl(&TFLunaSerial);
 LidarAdapter* lidarAdapter = &lidarImpl;
 BeitianBe880GpsAdapter gpsImpl(&GpsSerial, GPS_BAUD, GPS_RX_PIN, GPS_TX_PIN);
 GpsAdapter* gps = &gpsImpl;
+
+// Compass (QMC5883L, I2C)
 QMC5883LCompassAdapter compassImpl;
 CompassAdapter* compass = &compassImpl;
-DisplayController displayController(*displayAdapter, droneConfig);
+
+// Blackbox (SD card, SPI)
+SdCardStorageAdapter sdStorage(SD_CS_PIN, SD_MOSI_PIN, SD_SCK_PIN, SD_MISO_PIN);
+BlackboxController blackboxController(&sdStorage, droneConfig);
 
 static unsigned long lastScreenUpdate = 0;
 static unsigned long lastLoopTime = 0;
@@ -211,6 +232,9 @@ void setup() {
   avionicsParams.currentSensor = currentSensorAdapter;
   startAvionicsTask(&avionicsParams, 0);
   startRadioTask(radioAdapter, 0);
+
+  blackboxController.init();
+  startBlackboxTask(&blackboxController, 0);
 }
 
 void loop() {
@@ -280,6 +304,11 @@ void loop() {
 
   // Update trims from command (debounced inside FlightController)
   flightController.updateTrims(command, attitudeTrim);
+
+  // Blackbox: enqueue frame (non-blocking; drops when queue full)
+  BlackboxFrame frame;
+  frame.populate(attitude, command, localAvionics, motorOutput, millis());
+  (void)blackboxController.tryEnqueue(frame);
 
   // ================================================================
   // 2. DISPLAY LOOP (HUMAN INTERFACE) - Ground Only!

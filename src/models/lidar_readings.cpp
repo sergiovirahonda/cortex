@@ -6,19 +6,19 @@ LidarReadings::LidarReadings() {
     this->temperatureC = 0;
 }
 
-uint16_t LidarReadings::getDistanceCm() {
+uint16_t LidarReadings::getDistanceCm() const {
     return this->distanceCm;
 }
 
-bool LidarReadings::isValid() {
+bool LidarReadings::isValid() const {
     return this->signalStrength > 100 && this->distanceCm < 1200;
 }
 
-uint16_t LidarReadings::getSignalStrength() {
+uint16_t LidarReadings::getSignalStrength() const {
     return this->signalStrength;
 }
 
-float LidarReadings::getTemperatureC() {
+float LidarReadings::getTemperatureC() const {
     return this->temperatureC;
 }
 

@@ -48,12 +48,19 @@ public:
         void updateHeading(float compassAzimuthDeg, float dtS, bool compassHealthy = true);
         /** Fused heading in degrees [0, 360). */
         float getHeadingDeg() const;
+        /** For blackbox: heading and ground state. */
+        bool getHeadingInitialized() const;
+        bool getOnGround() const;
+        /** For blackbox: I-term accumulators. */
+        float getRollErrorSum() const;
+        float getPitchErrorSum() const;
+        float getYawErrorSum() const;
         // Raw getters
-        float getRollAngle();
-        float getRollRate();
-        float getPitchAngle();
-        float getPitchRate();
-        float getYawRate();
+        float getRollAngle() const;
+        float getRollRate() const;
+        float getPitchAngle() const;
+        float getPitchRate() const;
+        float getYawRate() const;
         // Calculate PID Outputs (gainBlend: 0 = launch high KP, 1 = flight low KP; I only when enableI)
         float calculateRollPD(float desiredRollAngle, bool enableI, float gainBlend = 1.0f);
         float calculatePitchPD(float desiredPitchAngle, bool enableI, float gainBlend = 1.0f);

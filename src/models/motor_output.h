@@ -13,10 +13,10 @@ class MotorOutput {
     void setMotor2Speed(int motor2Speed);
     void setMotor3Speed(int motor3Speed);
     void setMotor4Speed(int motor4Speed);
-    int getMotor1Speed();
-    int getMotor2Speed();
-    int getMotor3Speed();
-    int getMotor4Speed();
+    int getMotor1Speed() const;
+    int getMotor2Speed() const;
+    int getMotor3Speed() const;
+    int getMotor4Speed() const;
 };
 
 #endif

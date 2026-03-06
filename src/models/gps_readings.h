@@ -12,11 +12,11 @@ class GpsReadings {
       bool locationIsValid;
     public:
       GpsReadings();
-      double getLatitude();
-      double getLongitude();
-      double getAltitudeMeters();
-      uint32_t getSatellites();
-      bool getLocationIsValid();
+      double getLatitude() const;
+      double getLongitude() const;
+      double getAltitudeMeters() const;
+      uint32_t getSatellites() const;
+      bool getLocationIsValid() const;
       void setLatitude(double latitude);
       void setLongitude(double longitude);
       void setAltitudeMeters(double altitudeMeters);

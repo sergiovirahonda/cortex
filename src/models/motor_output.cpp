@@ -27,18 +27,18 @@ void MotorOutput::setMotor4Speed(int motor4Speed) {
 
 // Getters
 
-int MotorOutput::getMotor1Speed() {
+int MotorOutput::getMotor1Speed() const {
     return this->motor1Speed;
 }
 
-int MotorOutput::getMotor2Speed() {
+int MotorOutput::getMotor2Speed() const {
     return this->motor2Speed;
 }
 
-int MotorOutput::getMotor3Speed() {
+int MotorOutput::getMotor3Speed() const {
     return this->motor3Speed;
 }
 
-int MotorOutput::getMotor4Speed() {
+int MotorOutput::getMotor4Speed() const {
     return this->motor4Speed;
 }
