@@ -4,12 +4,15 @@
 #include "../adapters/lidar_adapter.h"
 #include "../adapters/gps_adapter.h"
 #include "../adapters/compass_adapter.h"
+#include "../adapters/barometer_adapter.h"
+#include "../adapters/current_sensor_adapter.h"
 
-// Struct to pack adapter pointers for FreeRTOS task parameter
 struct AvionicsParams {
     LidarAdapter* lidar;
     GpsAdapter* gps;
     CompassAdapter* compass;
+    BarometerAdapter* barometer;
+    CurrentSensorAdapter* currentSensor;
 };
 
 #endif

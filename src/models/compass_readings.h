@@ -11,8 +11,8 @@ class CompassReadings {
     void setRawAzimuth(int rawAzimuth);
     void setSmoothedAzimuth(int smoothedAzimuth);
     void setCompassHealth(bool healthy);
-    int getRawAzimuth();
-    int getSmoothedAzimuth();
+    int getRawAzimuth() const;
+    int getSmoothedAzimuth() const;
     bool getCompassHealth() const;
 };
 

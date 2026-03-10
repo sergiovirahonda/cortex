@@ -16,10 +16,13 @@ Cortex is the flight control system (FC) for your DIY drone project. It receives
 * 🎯 **MPU6050 Integration**: Hardware DLPF filtering and software calibration for accurate attitude sensing
 * 📺 **OLED Telemetry Display**: Real-time flight data on the drone (attitude, throttle, motor outputs, trims)
 * 📤 **Radio Telemetry Downlink**: Sends throttle, roll, pitch, and altitude-hold state (7-byte packet) to the transmitter via nRF24 ACK payload (for Synapse display)
+* 📊 **INA219 Current/Voltage**: Bus voltage, current draw, and power (mW) on the avionics I2C bus; 32V/2A calibration for 3S LiPo; readings in `AvionicsMetrics`
+* 🌡️ **Barometer (BMP280)**: Pressure and altitude on the avionics I2C bus; read on **Core 0** (avionics task) to avoid I2C contention with the flight loop; data available via `getAvionicsMetrics()`
+* 💾 **Blackbox Logging**: Flight data (attitude, command, motors, avionics) written to microSD via **SD_MMC** (1-bit mode); queue-based cross-core design (Core 1 enqueues frames, Core 0 task drains and writes); incremental log file naming
 * 📐 **Altitude Hold**: LiDAR + accelerometer fusion for vertical state; PID hold with engage (1) / no-op (0) / disengage (-1) from transmitter; failsafe auto-disengages; configurable min/max engage altitude and LiDAR valid range
 * 🧭 **Heading Lock (Yaw Hold)**: When yaw stick is centered, lock heading using fused compass + gyro (70/30); stick moved = rate control. Compass health check falls back to gyro-only if sensor is unhealthy.
 * 🔒 **Safety Features**: Arming sequence, throttle limits, and hardware initialization checks
-* 🧵 **Dual-Core Design**: Flight loop on core 1 (~1 kHz, no radio I/O); radio task on core 0 at 1000 Hz (receive + telemetry under mutex); avionics task on core 0 at 100 Hz (LIDAR, GPS, compass) with cross-core mutex for thread-safe reads
+* 🧵 **Dual-Core Design**: Flight loop on core 1 (~1 kHz, no radio I/O); radio task on core 0 at 1000 Hz (receive + telemetry under mutex); avionics task on core 0 at 100 Hz (LIDAR, GPS, compass, barometer, INA219) with cross-core mutex for thread-safe reads; blackbox task on core 0 drains a queue and writes to SD_MMC (no SD I/O from flight loop).
 * 📏 **Optional Avionics**: TF-Luna LIDAR, GPS (UART), and compass (I2C) supported; adapters are null-safe so sensors can be omitted per build
 * 🏗️ **Clean Architecture**: Modular design with adapters, models, controllers, and tasks
 * ⚙️ **PlatformIO Integration**: Modern build system with dependency management
@@ -35,15 +38,22 @@ Cortex is the flight control system (FC) for your DIY drone project. It receives
 * **nRF24L01** radio module
 * **SSD1306 OLED Display** (128x64, I2C)
 * **4x Brushless Motors** (matching your ESC specifications)
+* **BMP280** barometer (I2C, optional; on avionics bus for altitude/pressure)
+* **INA219** current/voltage sensor (I2C, optional; on avionics bus for battery telemetry)
+* **MicroSD card** (SD_MMC 1-bit; for blackbox CSV logs)
 
 ### Pin Connections
 
 | Component | Pin | ESP32-S3 Pin | Notes |
 |-----------|-----|--------------|-------|
-| **I2C Bus 0** (OLED & Compass) | | | |
-| I2C SDA | - | GPIO 1 | OLED, compass |
-| I2C SCL | - | GPIO 2 | OLED, compass |
+| **I2C Bus 0** (OLED, Compass, BMP280, INA219) | | | |
+| I2C SDA | - | GPIO 1 | OLED, compass, barometer, current sensor |
+| I2C SCL | - | GPIO 2 | OLED, compass, barometer, current sensor |
 | OLED RST | - | GPIO 21 | Optional reset |
+| **MicroSD (SD_MMC 1-bit, blackbox)** | | | |
+| SD_MMC CLK | - | GPIO 47 | 1-bit mode; tie breakout CS to 3.3V via 10kΩ |
+| SD_MMC CMD | - | GPIO 19 | |
+| SD_MMC D0 | - | GPIO 20 | |
 | **I2C Bus 1** (MPU6050, flight-critical) | | | |
 | MPU SDA | - | GPIO 17 | Dedicated for gyro polling |
 | MPU SCL | - | GPIO 18 | 400 kHz |
@@ -97,10 +107,12 @@ cortex/
 │   │   └── pins.h                  # GPIO and bus definitions
 │   ├── controllers/
 │   │   ├── flight_controller.*     # Throttle stages, mixing matrix, trims, failsafe, altitude hold (engage/lock)
-│   │   └── display_controller.*    # OLED output (gated by feature flag)
+│   │   ├── display_controller.*   # OLED output (gated by feature flag)
+│   │   └── blackbox_controller.*   # Queue, incremental log naming, CSV frame write
 │   ├── tasks/
-│   │   ├── avionics_task.*         # FreeRTOS task (core 0, 100 Hz): LIDAR/GPS/compass, mutex-protected
-│   │   └── radio_task.*            # FreeRTOS task (core 0, 1000 Hz): receive commands, send telemetry under mutex
+│   │   ├── avionics_task.*         # FreeRTOS task (core 0, ~100 Hz): LIDAR/GPS/compass/barometer/INA219
+│   │   ├── radio_task.*           # FreeRTOS task (core 0, 1000 Hz): receive, telemetry
+│   │   └── blackbox_task.*        # FreeRTOS task (core 0): drain queue, write frames to SD_MMC
 │   ├── adapters/
 │   │   ├── radio_adapter.h         # Radio interface
 │   │   ├── nrf24_radio_adapter.h/cpp # nRF24L01 implementation
@@ -115,8 +127,13 @@ cortex/
 │   │   ├── beitian_be880_gps_adapter.h/cpp # Beitian BE880 GPS (NMEA via TinyGPS+)
 │   │   ├── compass_adapter.h     # Compass interface
 │   │   ├── qmc5883l_adapter.h/cpp # QMC5883L compass implementation (I2C bus 0)
-│   │   ├── barometer_adapter.h    # Barometer interface
-│   │   └── bme280_adapter.h/cpp   # BME280 barometer implementation
+│   │   ├── barometer_adapter.h   # Barometer interface
+│   │   ├── bmp280_adapter.h/cpp  # BMP280 barometer (I2C bus 0, read on Core 0)
+│   │   ├── current_sensor_adapter.h   # Current/voltage interface
+│   │   ├── ina219_current_sensor_adapter.h/cpp # INA219 (I2C bus 0, 32V/2A)
+│   │   ├── storage_adapter.h     # Storage interface (blackbox)
+│   │   ├── sd_card_storage_adapter.h/cpp # SD_MMC 1-bit implementation
+│   │   └── ...
 │   ├── utils/
 │   │   └── angle_utils.h          # AngleUtils::wrap180, normalize360 (shortest-path, [0,360))
 │   └── models/
@@ -140,7 +157,14 @@ cortex/
 * **MPUAdapter**: MPU6050 interface, calibration, filtering (on I2C bus 1 for minimal interference)
 * **NativeDShotMotorAdapter**: ESP32 RMT-based DShot600 for ESC control
 * **Radio task**: FreeRTOS task pinned to **core 0** at **1000 Hz**. Polls radio for `DronePacket`; updates a command snapshot under mutex. Sends telemetry (ACK payload) when core 1 has submitted it via `submitTelemetry()` (mutex-protected). Keeps core 1 loop free of SPI/radio I/O for higher loop rate.
-* **Avionics task**: FreeRTOS task pinned to **core 0** at **~100 Hz** (4 KB stack). Samples LIDAR, GPS, and compass; updates `AvionicsMetrics` under a **FreeRTOS mutex**. Core 1 calls `getAvionicsMetrics(localAvionics)` for a thread-safe copy. Adapter pointers are null-checked so optional sensors can be omitted.
+* **Avionics task**: FreeRTOS task pinned to **core 0** at **~100 Hz** (4 KB stack). Samples LIDAR, GPS, compass, **barometer (BMP280), and INA219**; updates `AvionicsMetrics` under a **FreeRTOS mutex**. Core 1 calls `getAvionicsMetrics(localAvionics)` for a thread-safe copy. All I2C for these sensors runs on core 0 only, avoiding contention with the flight loop. Adapter pointers are null-checked so optional sensors can be omitted.
+* **Blackbox**: `BlackboxController` holds a FreeRTOS queue of `BlackboxFrame`. Core 1 (flight loop) calls `tryEnqueue(frame)` (non-blocking; drops when full). A **blackbox task** pinned to **core 0** drains the queue and writes CSV lines to microSD via `SdCardStorageAdapter` (SD_MMC 1-bit, pins CLK/CMD/D0). Log files use incremental naming (e.g. `flight_001.csv`); an index file stores the next number. SD I/O runs only on core 0 so the flight loop never blocks on card writes.
+
+### INA219, Barometer, and Blackbox
+
+* **INA219**: Current/voltage sensor on I2C bus 0 (avionics). Reads bus voltage (V), current (mA), and power (mW). Calibrated for 32 V / 2 A (e.g. 3S LiPo). Values are sampled in the avionics task and exposed in `AvionicsMetrics`; core 1 reads them via `getAvionicsMetrics()` for display or logging.
+* **Barometer (BMP280)**: Pressure and derived altitude on I2C bus 0. Read only in the **avionics task** on **core 0** so I2C stays off the flight loop; altitude is available in `AvionicsMetrics` and consumed by telemetry or blackbox.
+* **MicroSD blackbox**: Flight data (attitude, throttle, motors, LIDAR, GPS, barometer, INA219, etc.) is written to microSD via **SD_MMC 1-bit** (CLK=47, CMD=19, D0=20). Core 1 enqueues frames; a **blackbox task** on **core 0** drains the queue and appends CSV lines. Log files are named `flight_001.csv`, `flight_002.csv`, …; an index file on the card stores the next number so new flights get a new file without overwriting.
 
 ### Control Loop
 

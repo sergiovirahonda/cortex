@@ -5,7 +5,7 @@
 // Override any of these in platformio.ini to customize without editing code.
 
 // ---------------------------------------------------------
-// NRF24 RADIO
+// NRF24 RADIO (GPIO 9–14 reserved for radio; do not use for SD or other peripherals)
 // ---------------------------------------------------------
 #ifndef RADIO_CE_PIN
 #define RADIO_CE_PIN  14
@@ -54,7 +54,7 @@
 #endif
 
 // ---------------------------------------------------------
-// I2C BUS 0 (OLED & COMPASS)
+// I2C BUS 0 (OLED, Compass, BME280, INA219 – avionics, Core 0)
 // ---------------------------------------------------------
 #ifndef I2C_SDA
 #define I2C_SDA  1
@@ -90,6 +90,21 @@
 #endif
 #ifndef MPU_ADDR
 #define MPU_ADDR 0x68
+#endif
+
+// ---------------------------------------------------------
+// MICROSD (SD_MMC 1-bit – blackbox logging, Core 0)
+// Same GPIOs as former SPI wiring: SCK=47, MOSI=19, MISO=20. Map to SD_MMC: SCK->CLK, MOSI->CMD, MISO->D0.
+// Tie breakout CS (D3) to 3.3V via 10kΩ to select SD mode. Override in platformio.ini if needed.
+// ---------------------------------------------------------
+#ifndef SDMMC_CLK_PIN
+#define SDMMC_CLK_PIN  15
+#endif
+#ifndef SDMMC_CMD_PIN
+#define SDMMC_CMD_PIN  16
+#endif
+#ifndef SDMMC_D0_PIN
+#define SDMMC_D0_PIN   21
 #endif
 
 #endif

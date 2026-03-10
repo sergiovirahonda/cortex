@@ -11,10 +11,10 @@ class LidarReadings {
 
     public:
       LidarReadings();
-      uint16_t getDistanceCm();
-      uint16_t getSignalStrength();
-      bool isValid();
-      float getTemperatureC();
+      uint16_t getDistanceCm() const;
+      uint16_t getSignalStrength() const;
+      bool isValid() const;
+      float getTemperatureC() const;
       void setDistanceCm(uint16_t distanceCm);
       void setSignalStrength(uint16_t signalStrength);
       void setTemperatureC(float temperatureC);

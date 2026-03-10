@@ -10,23 +10,23 @@ GpsReadings::GpsReadings() {
 
 // Getters
 
-double GpsReadings::getLatitude() {
+double GpsReadings::getLatitude() const {
     return this->latitude;
 }
 
-double GpsReadings::getLongitude() {
+double GpsReadings::getLongitude() const {
     return this->longitude;
 }
 
-double GpsReadings::getAltitudeMeters() {
+double GpsReadings::getAltitudeMeters() const {
     return this->altitudeMeters;
 }
 
-uint32_t GpsReadings::getSatellites() {
+uint32_t GpsReadings::getSatellites() const {
     return this->satellites;
 }
 
-bool GpsReadings::getLocationIsValid() {
+bool GpsReadings::getLocationIsValid() const {
     return this->locationIsValid;
 }
 

@@ -47,15 +47,15 @@ void DroneCommand::reset() {
 }
 
 // --- GETTERS ---
-int16_t DroneCommand::getPitch()    { return this->pitch; }
-int16_t DroneCommand::getRoll()     { return this->roll; }
-int16_t DroneCommand::getYaw()      { return this->yaw; }
-int16_t DroneCommand::getThrottle() { return this->throttle; }
-int16_t DroneCommand::getRollTrim() { return this->rollTrim; }
-int16_t DroneCommand::getPitchTrim() { return this->pitchTrim; }
-int16_t DroneCommand::getYawTrim() { return this->yawTrim; }
-uint8_t DroneCommand::getTrimReset() { return this->trimReset; }
-int8_t DroneCommand::getAltitudeHold() { return this->altitudeHold; }
+int16_t DroneCommand::getPitch() const    { return this->pitch; }
+int16_t DroneCommand::getRoll() const     { return this->roll; }
+int16_t DroneCommand::getYaw() const      { return this->yaw; }
+int16_t DroneCommand::getThrottle() const { return this->throttle; }
+int16_t DroneCommand::getRollTrim() const { return this->rollTrim; }
+int16_t DroneCommand::getPitchTrim() const { return this->pitchTrim; }
+int16_t DroneCommand::getYawTrim() const { return this->yawTrim; }
+uint8_t DroneCommand::getTrimReset() const { return this->trimReset; }
+int8_t DroneCommand::getAltitudeHold() const { return this->altitudeHold; }
 
 // --- RADIO HELPERS (The Bridge) ---
 DronePacket DroneCommand::createPacket() {

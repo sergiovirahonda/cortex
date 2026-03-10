@@ -47,19 +47,19 @@ class DroneCommand {
         );
 
         // Getters - Control Commands
-        int16_t getPitch();
-        int16_t getRoll();
-        int16_t getYaw();
-        int16_t getThrottle();
+        int16_t getPitch() const;
+        int16_t getRoll() const;
+        int16_t getYaw() const;
+        int16_t getThrottle() const;
 
         // Getters - Trim Commands
-        int16_t getRollTrim();
-        int16_t getPitchTrim();
-        int16_t getYawTrim();
-        uint8_t getTrimReset();
+        int16_t getRollTrim() const;
+        int16_t getPitchTrim() const;
+        int16_t getYawTrim() const;
+        uint8_t getTrimReset() const;
 
         // Getters - Altitude Hold Commands
-        int8_t getAltitudeHold();
+        int8_t getAltitudeHold() const;
 
         // Setters - Control Commands
         void setPitch(int16_t pitch);

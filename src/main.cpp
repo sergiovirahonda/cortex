@@ -16,7 +16,7 @@
 #include "adapters/mpu6050_adapter.h"
 #include "adapters/motor_adapter.h"
 #include "adapters/barometer_adapter.h"
-#include "adapters/bme280_adapter.h"
+#include "adapters/bmp280_adapter.h"
 #include "adapters/display_adapter.h"
 #include "adapters/ssd1306_display_adapter.h"
 #include "adapters/lidar_adapter.h"
@@ -25,10 +25,17 @@
 #include "adapters/beitian_be880_gps_adapter.h"
 #include "adapters/compass_adapter.h"
 #include "adapters/qmc5883l_adapter.h"
+#include "adapters/current_sensor_adapter.h"
+#include "adapters/ina219_current_sensor_adapter.h"
 #include "controllers/flight_controller.h"
 #include "controllers/display_controller.h"
+#include "controllers/blackbox_controller.h"
+#include "adapters/storage_adapter.h"
+#include "adapters/sd_card_storage_adapter.h"
 #include "tasks/avionics_task.h"
 #include "tasks/radio_task.h"
+#include "tasks/blackbox_task.h"
+#include "models/blackbox_frame.h"
 #include "config/pins.h"
 #include "utils/loop_utils.h"
 
@@ -56,28 +63,45 @@ Nrf24RadioAdapter radioImpl(
     const_cast<byte*>(droneConfig.getRadioAddress())
 );
 RadioAdapter* radioAdapter = &radioImpl;
+
+// IMU (MPU6050)
 Mpu6050Adapter mpuImpl(&mpu);
 MPUAdapter* mpuAdapter = &mpuImpl;
-BME280BarometerAdapter barometerImpl(&Wire);
+
+// Barometer & current sensor (I2C: BMP280, INA219)
+BMP280BarometerAdapter barometerImpl(&Wire);
 BarometerAdapter* barometerAdapter = &barometerImpl;
+Ina219CurrentSensorAdapter currentSensorImpl(&Wire);
+CurrentSensorAdapter* currentSensorAdapter = &currentSensorImpl;
+
+// Flight controller and ESCs
 FlightController flightController(droneConfig);
 NativeDShotMotorAdapter esc1, esc2, esc3, esc4;
+
+// Display (OLED, I2C)
 Ssd1306DisplayAdapter displayImpl(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RST, OLED_ADDR);
 DisplayAdapter* displayAdapter = &displayImpl;
+DisplayController displayController(*displayAdapter, droneConfig);
+
+// Serial peripherals: Lidar (TF-Luna) and GPS (Beitian BE880)
 HardwareSerial TFLunaSerial(1);
 HardwareSerial GpsSerial(2);
 TFLunaLidarAdapter lidarImpl(&TFLunaSerial);
 LidarAdapter* lidarAdapter = &lidarImpl;
 BeitianBe880GpsAdapter gpsImpl(&GpsSerial, GPS_BAUD, GPS_RX_PIN, GPS_TX_PIN);
 GpsAdapter* gps = &gpsImpl;
+
+// Compass (QMC5883L, I2C)
 QMC5883LCompassAdapter compassImpl;
 CompassAdapter* compass = &compassImpl;
-DisplayController displayController(*displayAdapter, droneConfig);
+
+// Blackbox (SD_MMC 1-bit)
+SdCardStorageAdapter sdStorage(SDMMC_CLK_PIN, SDMMC_CMD_PIN, SDMMC_D0_PIN);
+BlackboxController blackboxController(&sdStorage, droneConfig);
 
 static unsigned long lastScreenUpdate = 0;
 static unsigned long lastLoopTime = 0;
 static float loopFrequencyHz = 0.0f;
-
 void setup() {
   Serial.begin(115200);
 
@@ -93,7 +117,7 @@ void setup() {
   if (droneConfig.getFeatureFlagEnableDisplay()) {
     if (!displayAdapter->begin()) {
       Serial.println(F("SSD1306 allocation failed. Checking I2C connection..."));
-      for (;;); // Don't proceed, loop forever
+      for (;;); // Halt on display init failure
     }
     displayAdapter->clearDisplay();
     displayAdapter->invertDisplay(false);
@@ -113,17 +137,18 @@ void setup() {
 
   // Initialize radio & MPU drivers
   radioAdapter->begin();
-  if (!radioAdapter->isChipConnected()) {
-    displayController.println("Radio: FAIL");
-    displayController.println("Check Wiring!");
-    displayController.display();
-    while (1); // Stop here
+  if (radioAdapter->isChipConnected()) {
+    displayController.println("Radio status: OK");
+  } else {
+    displayController.println("Radio: -- (optional, not connected)");
   }
   mpuAdapter->begin();
   barometerAdapter->begin();
   displayController.println("Radio status: OK");
   displayController.println("MPU status: OK");
-  displayController.println(barometerAdapter->isConnected() ? "BME280: OK" : "BME280: --");
+  displayController.println(barometerAdapter->isConnected() ? "BMP280: OK" : "BMP280: --");
+  currentSensorAdapter->begin();
+  displayController.println(currentSensorAdapter->isConnected() ? "INA219: OK" : "INA219: --");
   displayController.display();
   delay(5);
 
@@ -134,7 +159,7 @@ void setup() {
   TFLunaSerial.begin(115200, SERIAL_8N1, TF_LUNA_RX_PIN, TF_LUNA_TX_PIN);
   lidarAdapter->begin();
   gps->begin();
-  delay(150);  // Let's give the sensors some time to settle before we start using them.
+  delay(150);  // Allow sensors to settle before use.
 
   displayController.println("LIDAR, GPS, and Compass initialized.");
   displayController.display();
@@ -201,8 +226,13 @@ void setup() {
   avionicsParams.lidar = lidarAdapter;
   avionicsParams.gps = gps;
   avionicsParams.compass = compass;
+  avionicsParams.barometer = barometerAdapter;
+  avionicsParams.currentSensor = currentSensorAdapter;
   startAvionicsTask(&avionicsParams, 0);
   startRadioTask(radioAdapter, 0);
+
+  blackboxController.init();
+  startBlackboxTask(&blackboxController, 0);
 }
 
 void loop() {
@@ -212,6 +242,8 @@ void loop() {
   // ================================================================
   AvionicsMetrics localAvionics;
   getAvionicsMetrics(localAvionics);
+  PowerSnapshot powerSnapshot;
+  powerSnapshot.fromReadings(localAvionics.currentSensor);
 
   // ================================================================
   // 1. FAST LOOP (FLIGHT CRITICAL) - 1000Hz
@@ -272,6 +304,11 @@ void loop() {
 
   // Update trims from command (debounced inside FlightController)
   flightController.updateTrims(command, attitudeTrim);
+
+  // Blackbox: enqueue frame (non-blocking; drops when queue full)
+  BlackboxFrame frame;
+  frame.populate(attitude, command, localAvionics, motorOutput, powerSnapshot, millis());
+  (void)blackboxController.tryEnqueue(frame);
 
   // ================================================================
   // 2. DISPLAY LOOP (HUMAN INTERFACE) - Ground Only!

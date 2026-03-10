@@ -78,6 +78,16 @@ class DroneConfig {
 
         // Radio (nRF24L01 pipe address; must match TX)
         byte radioAddress[6];
+
+        // Blackbox: queue length, process rate (ms), and log file naming
+        static const size_t BLACKBOX_INDEX_FILENAME_MAX = 32;
+        static const size_t BLACKBOX_LOG_PREFIX_MAX = 16;
+        static const size_t BLACKBOX_LOG_SUFFIX_MAX = 8;
+        char blackboxIndexFilename[32];
+        char blackboxLogPrefix[16];
+        char blackboxLogSuffix[8];
+        uint32_t blackboxQueueLen;
+        uint32_t blackboxProcessRateMs;
     
     public:
         DroneConfig();
@@ -154,6 +164,13 @@ class DroneConfig {
 
         // Radio address getter (for RadioAdapter; must match TX address)
         const byte* getRadioAddress() const;
+
+        // Blackbox getters (queue size, process rate, file naming)
+        uint32_t getBlackboxQueueLen() const;
+        uint32_t getBlackboxProcessRateMs() const;
+        const char* getBlackboxIndexFilename() const;
+        const char* getBlackboxLogPrefix() const;
+        const char* getBlackboxLogSuffix() const;
 };
 
 #endif
