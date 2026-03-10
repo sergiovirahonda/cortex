@@ -95,16 +95,13 @@ GpsAdapter* gps = &gpsImpl;
 QMC5883LCompassAdapter compassImpl;
 CompassAdapter* compass = &compassImpl;
 
-// Blackbox (SD card, SPI)
-// Force internal S3 pull-up resistors on the required lines
+// Blackbox (SD_MMC 1-bit)
 SdCardStorageAdapter sdStorage(SDMMC_CLK_PIN, SDMMC_CMD_PIN, SDMMC_D0_PIN);
 BlackboxController blackboxController(&sdStorage, droneConfig);
 
 static unsigned long lastScreenUpdate = 0;
 static unsigned long lastLoopTime = 0;
 static float loopFrequencyHz = 0.0f;
-static unsigned long lastBaroPrintMs = 0;
-
 void setup() {
   Serial.begin(115200);
 
@@ -120,7 +117,7 @@ void setup() {
   if (droneConfig.getFeatureFlagEnableDisplay()) {
     if (!displayAdapter->begin()) {
       Serial.println(F("SSD1306 allocation failed. Checking I2C connection..."));
-      for (;;); // Don't proceed, loop forever
+      for (;;); // Halt on display init failure
     }
     displayAdapter->clearDisplay();
     displayAdapter->invertDisplay(false);
@@ -162,7 +159,7 @@ void setup() {
   TFLunaSerial.begin(115200, SERIAL_8N1, TF_LUNA_RX_PIN, TF_LUNA_TX_PIN);
   lidarAdapter->begin();
   gps->begin();
-  delay(150);  // Let's give the sensors some time to settle before we start using them.
+  delay(150);  // Allow sensors to settle before use.
 
   displayController.println("LIDAR, GPS, and Compass initialized.");
   displayController.display();
@@ -316,34 +313,6 @@ void loop() {
   // ================================================================
   // 2. DISPLAY LOOP (HUMAN INTERFACE) - Ground Only!
   // ================================================================
-
-  // Print barometer and compass to Serial every second (throttled)
-  if (millis() - lastBaroPrintMs >= 1000) {
-    lastBaroPrintMs = millis();
-    if (localAvionics.barometer.isConnected()) {
-      Serial.print(F("Baro: "));
-      Serial.print(localAvionics.barometer.getPressureHpa(), 2);
-      Serial.print(F(" hPa  Alt: "));
-      Serial.print(localAvionics.barometer.getAltitudeMeters(), 2);
-      Serial.println(F(" m"));
-    } else {
-      Serial.println(F("Baro: --"));
-    }
-    if (localAvionics.compass.getCompassHealth()) {
-      Serial.print(F("Compass: "));
-      Serial.print(localAvionics.compass.getRawAzimuth());
-      Serial.print(F(" deg (raw)  "));
-      Serial.print(localAvionics.compass.getSmoothedAzimuth());
-      Serial.println(F(" deg (smoothed)"));
-    } else {
-      Serial.println(F("Compass: --"));
-    }
-    Serial.print(F("Battery: "));
-    Serial.print(localAvionics.currentSensor.getBusVoltageV(), 2);
-    Serial.print(F(" V  "));
-    Serial.print(localAvionics.currentSensor.getCurrentMa(), 2);
-    Serial.println(F(" mA"));
-  }
 
   // Only update screen if throttle is at absolute zero to prevent PID stutter
   if (command.getThrottle() < 300) {

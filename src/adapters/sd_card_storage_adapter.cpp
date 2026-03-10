@@ -89,7 +89,7 @@ bool SdCardStorageAdapter::writeLine(const char* line) {
     if (!impl_ || !impl_->logFile) return false;
     
     impl_->logFile.println(line);
-    impl_->logFile.flush(); // Survive instant power loss
+    impl_->logFile.flush();  // Reduce data loss on power loss
     
     return true;
 }
