@@ -33,11 +33,10 @@ build_flags =
     -D MPU_SDA=17
     -D MPU_SCL=18
     -D SCREEN_WIDTH=128
-    ; ----- MicroSD (SPI blackbox): do NOT use 9–14 (radio) or 17/18 (MPU). Defaults: CS=48 SCK=47 MOSI=19 MISO=20 -----
-    ; -D SD_CS_PIN=48
-    ; -D SD_MOSI_PIN=19
-    ; -D SD_SCK_PIN=47
-    ; -D SD_MISO_PIN=20
+    ; ----- MicroSD (SD_MMC 1-bit): CLK=12, CMD=11, D0=13. Breakout: SCK->CLK, MOSI->CMD, MISO->D0; CS->3.3V via 10k -----
+    ; -D SDMMC_CLK_PIN=12
+    ; -D SDMMC_CMD_PIN=11
+    ; -D SDMMC_D0_PIN=13
     -D SCREEN_HEIGHT=64
     -D OLED_ADDR=0x3C
     -D MPU_ADDR=0x68

@@ -16,7 +16,7 @@
 #include "adapters/mpu6050_adapter.h"
 #include "adapters/motor_adapter.h"
 #include "adapters/barometer_adapter.h"
-#include "adapters/bme280_adapter.h"
+#include "adapters/bmp280_adapter.h"
 #include "adapters/display_adapter.h"
 #include "adapters/ssd1306_display_adapter.h"
 #include "adapters/lidar_adapter.h"
@@ -68,8 +68,8 @@ RadioAdapter* radioAdapter = &radioImpl;
 Mpu6050Adapter mpuImpl(&mpu);
 MPUAdapter* mpuAdapter = &mpuImpl;
 
-// Barometer & current sensor (I2C: BME280, INA219)
-BME280BarometerAdapter barometerImpl(&Wire);
+// Barometer & current sensor (I2C: BMP280, INA219)
+BMP280BarometerAdapter barometerImpl(&Wire);
 BarometerAdapter* barometerAdapter = &barometerImpl;
 Ina219CurrentSensorAdapter currentSensorImpl(&Wire);
 CurrentSensorAdapter* currentSensorAdapter = &currentSensorImpl;
@@ -96,12 +96,14 @@ QMC5883LCompassAdapter compassImpl;
 CompassAdapter* compass = &compassImpl;
 
 // Blackbox (SD card, SPI)
-SdCardStorageAdapter sdStorage(SD_CS_PIN, SD_MOSI_PIN, SD_SCK_PIN, SD_MISO_PIN);
+// Force internal S3 pull-up resistors on the required lines
+SdCardStorageAdapter sdStorage(SDMMC_CLK_PIN, SDMMC_CMD_PIN, SDMMC_D0_PIN);
 BlackboxController blackboxController(&sdStorage, droneConfig);
 
 static unsigned long lastScreenUpdate = 0;
 static unsigned long lastLoopTime = 0;
 static float loopFrequencyHz = 0.0f;
+static unsigned long lastBaroPrintMs = 0;
 
 void setup() {
   Serial.begin(115200);
@@ -138,17 +140,16 @@ void setup() {
 
   // Initialize radio & MPU drivers
   radioAdapter->begin();
-  if (!radioAdapter->isChipConnected()) {
-    displayController.println("Radio: FAIL");
-    displayController.println("Check Wiring!");
-    displayController.display();
-    while (1); // Stop here
+  if (radioAdapter->isChipConnected()) {
+    displayController.println("Radio status: OK");
+  } else {
+    displayController.println("Radio: -- (optional, not connected)");
   }
   mpuAdapter->begin();
   barometerAdapter->begin();
   displayController.println("Radio status: OK");
   displayController.println("MPU status: OK");
-  displayController.println(barometerAdapter->isConnected() ? "BME280: OK" : "BME280: --");
+  displayController.println(barometerAdapter->isConnected() ? "BMP280: OK" : "BMP280: --");
   currentSensorAdapter->begin();
   displayController.println(currentSensorAdapter->isConnected() ? "INA219: OK" : "INA219: --");
   displayController.display();
@@ -244,6 +245,8 @@ void loop() {
   // ================================================================
   AvionicsMetrics localAvionics;
   getAvionicsMetrics(localAvionics);
+  PowerSnapshot powerSnapshot;
+  powerSnapshot.fromReadings(localAvionics.currentSensor);
 
   // ================================================================
   // 1. FAST LOOP (FLIGHT CRITICAL) - 1000Hz
@@ -307,12 +310,40 @@ void loop() {
 
   // Blackbox: enqueue frame (non-blocking; drops when queue full)
   BlackboxFrame frame;
-  frame.populate(attitude, command, localAvionics, motorOutput, millis());
+  frame.populate(attitude, command, localAvionics, motorOutput, powerSnapshot, millis());
   (void)blackboxController.tryEnqueue(frame);
 
   // ================================================================
   // 2. DISPLAY LOOP (HUMAN INTERFACE) - Ground Only!
   // ================================================================
+
+  // Print barometer and compass to Serial every second (throttled)
+  if (millis() - lastBaroPrintMs >= 1000) {
+    lastBaroPrintMs = millis();
+    if (localAvionics.barometer.isConnected()) {
+      Serial.print(F("Baro: "));
+      Serial.print(localAvionics.barometer.getPressureHpa(), 2);
+      Serial.print(F(" hPa  Alt: "));
+      Serial.print(localAvionics.barometer.getAltitudeMeters(), 2);
+      Serial.println(F(" m"));
+    } else {
+      Serial.println(F("Baro: --"));
+    }
+    if (localAvionics.compass.getCompassHealth()) {
+      Serial.print(F("Compass: "));
+      Serial.print(localAvionics.compass.getRawAzimuth());
+      Serial.print(F(" deg (raw)  "));
+      Serial.print(localAvionics.compass.getSmoothedAzimuth());
+      Serial.println(F(" deg (smoothed)"));
+    } else {
+      Serial.println(F("Compass: --"));
+    }
+    Serial.print(F("Battery: "));
+    Serial.print(localAvionics.currentSensor.getBusVoltageV(), 2);
+    Serial.print(F(" V  "));
+    Serial.print(localAvionics.currentSensor.getCurrentMa(), 2);
+    Serial.println(F(" mA"));
+  }
 
   // Only update screen if throttle is at absolute zero to prevent PID stutter
   if (command.getThrottle() < 300) {

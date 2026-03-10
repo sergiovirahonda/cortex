@@ -93,21 +93,18 @@
 #endif
 
 // ---------------------------------------------------------
-// MICROSD (SPI – blackbox logging, Core 0)
-// Do NOT use GPIO 9–14 (NRF24 radio) or 17–18 (MPU I2C). See above.
-// Defaults: CS=48, SCK=47, MOSI=19, MISO=20. Override in platformio.ini if needed.
+// MICROSD (SD_MMC 1-bit – blackbox logging, Core 0)
+// Same GPIOs as former SPI wiring: SCK=47, MOSI=19, MISO=20. Map to SD_MMC: SCK->CLK, MOSI->CMD, MISO->D0.
+// Tie breakout CS (D3) to 3.3V via 10kΩ to select SD mode. Override in platformio.ini if needed.
 // ---------------------------------------------------------
-#ifndef SD_CS_PIN
-#define SD_CS_PIN   48
+#ifndef SDMMC_CLK_PIN
+#define SDMMC_CLK_PIN  15
 #endif
-#ifndef SD_MOSI_PIN
-#define SD_MOSI_PIN 19
+#ifndef SDMMC_CMD_PIN
+#define SDMMC_CMD_PIN  16
 #endif
-#ifndef SD_SCK_PIN
-#define SD_SCK_PIN  47
-#endif
-#ifndef SD_MISO_PIN
-#define SD_MISO_PIN 20
+#ifndef SDMMC_D0_PIN
+#define SDMMC_D0_PIN   21
 #endif
 
 #endif

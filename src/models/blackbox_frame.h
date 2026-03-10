@@ -55,6 +55,13 @@ struct CompassSnapshot {
     bool available;
 };
 
+struct PowerSnapshot {
+    float battVoltage;
+    float current_mA;
+
+    void fromReadings(const Ina219Readings& readings);
+};
+
 struct MotorSnapshot {
     int m1;
     int m2;
@@ -69,6 +76,7 @@ struct BlackboxFrame {
     AltitudeSnapshot altitude;
     GpsSnapshot gps;
     CompassSnapshot compass;
+    PowerSnapshot power;
     MotorSnapshot motors;
 
     /** Fill this frame from the main loop models. Call from flight loop then enqueue. */
@@ -77,6 +85,7 @@ struct BlackboxFrame {
         const DroneCommand& command,
         const AvionicsMetrics& avionics,
         const MotorOutput& motors,
+        const PowerSnapshot& power,
         uint32_t timestampMs);
 };
 

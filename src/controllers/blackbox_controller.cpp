@@ -77,19 +77,22 @@ bool BlackboxController::tryEnqueue(const BlackboxFrame& frame) {
 
 void BlackboxController::writeCsvHeader() {
     const char* header =
-        "timestamp_ms,roll_angle,roll_rate,pitch_angle,pitch_rate,yaw_rate,heading_deg,heading_init,on_ground,"
-        "roll_error_sum,pitch_error_sum,yaw_error_sum,"
-        "pitch,roll,yaw,throttle,roll_trim,pitch_trim,yaw_trim,trim_reset,altitude_hold,"
-        "rel_alt_cm,abs_alt_m,"
-        "gps_lat,gps_lng,gps_sats,gps_valid,gps_alt_m,"
-        "compass_azimuth,compass_avail,"
+        "timestamp_ms,batt_v,current_ma,"
+        "roll_angle,roll_rate,pitch_angle,"
+        "pitch_rate,yaw_rate,heading_deg,heading_init,"
+        "on_ground,roll_error_sum,pitch_error_sum,"
+        "yaw_error_sum,pitch,roll,yaw,throttle,roll_trim,"
+        "pitch_trim,yaw_trim,trim_reset,altitude_hold,"
+        "rel_alt_cm,abs_alt_m,gps_lat,gps_lng,gps_sats,"
+        "gps_valid,gps_alt_m,compass_azimuth,compass_avail,"
         "m1,m2,m3,m4";
     (void)storage_->writeLine(header);
 }
 
 void BlackboxController::formatFrameToCsv(const BlackboxFrame& frame, char* buf, size_t bufSize) {
     snprintf(buf, bufSize,
-        "%" PRIu32 ",%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%d,%d,"
+        "%" PRIu32 ",%.2f,%.2f,"
+        "%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%d,%d,"
         "%.4f,%.4f,%.4f,"
         "%d,%d,%d,%d,%d,%d,%d,%u,%d,"
         "%.2f,%.2f,"
@@ -97,6 +100,7 @@ void BlackboxController::formatFrameToCsv(const BlackboxFrame& frame, char* buf,
         "%.2f,%d,"
         "%d,%d,%d,%d",
         frame.timestampMs,
+        frame.power.battVoltage, frame.power.current_mA,
         frame.attitude.rollAngle, frame.attitude.rollRate,
         frame.attitude.pitchAngle, frame.attitude.pitchRate,
         frame.attitude.yawRate, frame.attitude.headingDeg,

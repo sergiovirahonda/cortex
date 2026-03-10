@@ -10,7 +10,12 @@ static void BlackboxLoop(void* pvParameters) {
     const TickType_t delayTicks = rateMs > 0 ? pdMS_TO_TICKS(rateMs) : 1;
 
     for (;;) {
-        controller->processNextFrame();
+        // Drain the queue completely on every wake cycle
+        while (uxQueueMessagesWaiting(controller->getQueueHandle()) > 0) {
+            controller->processNextFrame();
+        }
+        
+        // Sleep and let the queue fill up again
         vTaskDelay(delayTicks);
     }
 }

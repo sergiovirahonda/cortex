@@ -7,7 +7,7 @@ struct SdCardStorageAdapterImpl;
 
 class SdCardStorageAdapter : public StorageAdapter {
 public:
-    SdCardStorageAdapter(uint8_t csPin, int mosiPin, int sckPin, int misoPin);
+    SdCardStorageAdapter(int clkPin, int cmdPin, int d0Pin);
     ~SdCardStorageAdapter() override;
 
     bool begin() override;
@@ -19,10 +19,9 @@ public:
     bool writeIndexFile(const char* path, uint16_t index) override;
 
 private:
-    uint8_t csPin_;
-    int mosiPin_;
-    int sckPin_;
-    int misoPin_;
+    int clkPin_;
+    int cmdPin_;
+    int d0Pin_;
     bool available_;
     SdCardStorageAdapterImpl* impl_;
 };

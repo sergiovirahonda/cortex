@@ -4,7 +4,7 @@
 
 Ina219CurrentSensorAdapter::Ina219CurrentSensorAdapter(TwoWire* wire)
     : wire_(wire), connected_(false) {
-    ina_ = new Adafruit_INA219(0x40);  // default INA219 I2C address
+    ina_ = new Adafruit_INA219(0x40);
 }
 
 Ina219CurrentSensorAdapter::~Ina219CurrentSensorAdapter() {
@@ -15,7 +15,7 @@ Ina219CurrentSensorAdapter::~Ina219CurrentSensorAdapter() {
 bool Ina219CurrentSensorAdapter::begin() {
     connected_ = ina_->begin(wire_);
     if (connected_) {
-        ina_->setCalibration_32V_2A();  // default; use 16V_400mA for higher precision if needed
+        ina_->setCalibration_32V_2A();
     }
     return connected_;
 }
